@@ -1,0 +1,200 @@
+@model FeedCraft_v0.Models.FeedFormulationViewModel
+
+@{
+    ViewData["Title"] = "Feed Formulation";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-4">Least-Cost Feed Formulation</h2>
+
+    @if (Model.IsSolved)
+    {
+        <div class="alert alert-success">
+            <h4>Optimization Result</h4>
+            <p><strong>Total Cost:</strong> $@Model.TotalCost.ToString("F2")</p>
+            
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Ingredient</th>
+                        <th>Quantity (kg)</th>
+                        <th>% of Batch</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var kvp in Model.OptimizedQuantities)
+                    {
+                        <tr>
+                            <td>@kvp.Key</td>
+                            <td>@kvp.Value.ToString("F2")</td>
+                            <td>@((kvp.Value / Model.BatchSize * 100).ToString("F2"))%</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <h4>Error</h4>
+            <p>@Model.ErrorMessage</p>
+        </div>
+    }
+
+    <form asp-action="Calculate" method="post" id="feedForm">
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Batch Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-group row">
+                    <label class="col-sm-2 col-form-label">Batch Size (kg):</label>
+                    <div class="col-sm-4">
+                        <input asp-for="BatchSize" class="form-control" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Ingredients</h5>
+                <button type="button" class="btn btn-primary btn-sm" onclick="addIngredientRow()">Add Ingredient</button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="ingredientsTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Cost/Unit</th>
+                                <th>CP (%)</th>
+                                <th>Fat (%)</th>
+                                <th>Lysine (%)</th>
+                                <th>Ash (%)</th>
+                                <th>ME (kcal/kg)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < Model.Ingredients.Count; i++)
+                            {
+                                <tr>
+                                    <td><input asp-for="Ingredients[i].Name" class="form-control" /></td>
+                                    <td><input asp-for="Ingredients[i].CostPerUnit" class="form-control" step="0.01" /></td>
+                                    <td><input asp-for="Ingredients[i].CrudeProteinPct" class="form-control" step="0.1" /></td>
+                                    <td><input asp-for="Ingredients[i].FatPct" class="form-control" step="0.1" /></td>
+                                    <td><input asp-for="Ingredients[i].LysinePct" class="form-control" step="0.01" /></td>
+                                    <td><input asp-for="Ingredients[i].AshPct" class="form-control" step="0.1" /></td>
+                                    <td><input asp-for="Ingredients[i].ME" class="form-control" step="1" /></td>
+                                    <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Nutrient Constraints</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Nutrient</th>
+                                <th>Min Value</th>
+                                <th>Max Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < Model.Constraints.Count; i++)
+                            {
+                                <tr>
+                                    <td>
+                                        <input asp-for="Constraints[i].NutrientName" class="form-control" readonly />
+                                    </td>
+                                    <td><input asp-for="Constraints[i].MinValue" class="form-control" step="0.01" /></td>
+                                    <td><input asp-for="Constraints[i].MaxValue" class="form-control" step="0.01" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-success btn-lg">Calculate Least Cost Mix</button>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        function addIngredientRow() {
+            var table = document.getElementById("ingredientsTable").getElementsByTagName('tbody')[0];
+            var rowCount = table.rows.length;
+            var row = table.insertRow(rowCount);
+            
+            // Simple string template for new row
+            // Note: In a real app we might clone the first row or use a template
+            // We need to ensure the index [i] is correct for model binding.
+            // Using a simple counter approach or just assume user won't delete all rows then add one back with wrong index.
+            // For this demo, we'll just increment based on current count.
+            
+            var index = rowCount;
+            
+            var cellName = row.insertCell(0);
+            cellName.innerHTML = '<input name="Ingredients[' + index + '].Name" class="form-control" value="New Ingredient" />';
+
+            var cellCost = row.insertCell(1);
+            cellCost.innerHTML = '<input name="Ingredients[' + index + '].CostPerUnit" class="form-control" type="number" step="0.01" value="0" />';
+
+            var cellCP = row.insertCell(2);
+            cellCP.innerHTML = '<input name="Ingredients[' + index + '].CrudeProteinPct" class="form-control" type="number" step="0.1" value="0" />';
+
+            var cellFat = row.insertCell(3);
+            cellFat.innerHTML = '<input name="Ingredients[' + index + '].FatPct" class="form-control" type="number" step="0.1" value="0" />';
+
+            var cellLysine = row.insertCell(4);
+            cellLysine.innerHTML = '<input name="Ingredients[' + index + '].LysinePct" class="form-control" type="number" step="0.01" value="0" />';
+
+            var cellAsh = row.insertCell(5);
+            cellAsh.innerHTML = '<input name="Ingredients[' + index + '].AshPct" class="form-control" type="number" step="0.1" value="0" />';
+
+            var cellME = row.insertCell(6);
+            cellME.innerHTML = '<input name="Ingredients[' + index + '].ME" class="form-control" type="number" step="1" value="0" />';
+            
+            var cellAction = row.insertCell(7);
+            cellAction.innerHTML = '<button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button>';
+        }
+
+        function removeRow(btn) {
+            var row = btn.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+            // Note: Removing rows might break model binding indices if we don't re-index. 
+            // ASP.NET Core model binding can handle non-sequential indices if configured or we can re-index in JS.
+            // For a simple demo, we will accept that deleting intermediate rows might cause issues on POST 
+            // unless we re-index inputs. 
+            // Let's add a quick re-indexer for robustness.
+            reIndexRows();
+        }
+
+        function reIndexRows() {
+            var table = document.getElementById("ingredientsTable").getElementsByTagName('tbody')[0];
+            for (var i = 0; i < table.rows.length; i++) {
+                var inputs = table.rows[i].getElementsByTagName('input');
+                for (var j = 0; j < inputs.length; j++) {
+                    var name = inputs[j].name;
+                    if (name.indexOf('Ingredients[') > -1) {
+                        inputs[j].name = name.replace(/Ingredients\[\d+\]/, 'Ingredients[' + i + ']');
+                    }
+                }
+            }
+        }
+    </script>
+}
