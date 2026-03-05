@@ -65,6 +65,22 @@ namespace FeedCraft_v0.Services
                 {
                     model.OptimizedQuantities[model.Ingredients[i].Name] = x[i].SolutionValue();
                 }
+
+                // Calculate resulting nutrient values
+                model.CalculatedNutrients = new Dictionary<string, double>();
+                foreach (var constraint in model.Constraints)
+                {
+                    double totalNutrientAmount = 0;
+                    for (int i = 0; i < model.Ingredients.Count; i++)
+                    {
+                        double quantity = x[i].SolutionValue();
+                        double nutrientValue = GetNutrientValue(model.Ingredients[i], constraint.NutrientName);
+                        totalNutrientAmount += quantity * nutrientValue;
+                    }
+                    // The result is the weighted average per unit (e.g. % or kcal/kg)
+                    model.CalculatedNutrients[constraint.NutrientName] = totalNutrientAmount / model.BatchSize;
+                }
+
                 model.ErrorMessage = string.Empty;
             }
             else

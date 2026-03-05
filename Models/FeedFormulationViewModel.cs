@@ -12,6 +12,7 @@ namespace FeedCraft_v0.Models
         public bool IsSolved { get; set; }
         public decimal TotalCost { get; set; }
         public Dictionary<string, double> OptimizedQuantities { get; set; } = new Dictionary<string, double>();
+        public Dictionary<string, double> CalculatedNutrients { get; set; } = new Dictionary<string, double>();
         public string ErrorMessage { get; set; } = string.Empty;
     }
 }

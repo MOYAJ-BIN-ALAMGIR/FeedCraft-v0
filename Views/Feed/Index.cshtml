@@ -32,6 +32,31 @@
                     }
                 </tbody>
             </table>
+
+            <h5 class="mt-4">Nutrient Analysis</h5>
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th>Nutrient</th>
+                        <th>Value</th>
+                        <th>Target (Min - Max)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var nutrient in Model.CalculatedNutrients)
+                    {
+                        var constraint = Model.Constraints.FirstOrDefault(c => c.NutrientName == nutrient.Key);
+                        var min = constraint?.MinValue?.ToString("F2") ?? "-";
+                        var max = constraint?.MaxValue?.ToString("F2") ?? "-";
+                        
+                        <tr>
+                            <td>@nutrient.Key</td>
+                            <td>@nutrient.Value.ToString("F2")</td>
+                            <td>@min - @max</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
     else if (!string.IsNullOrEmpty(Model.ErrorMessage))
