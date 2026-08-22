@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using FeedCraft_v0.Models;
 using FeedCraft_v0.Services;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 
 namespace FeedCraft_v0.Controllers
@@ -18,37 +19,25 @@ namespace FeedCraft_v0.Controllers
         [HttpGet]
         public IActionResult Index()
         {
-            var model = new FeedFormulationViewModel
-            {
-                Ingredients = new List<Ingredient>
-                {
-                    new Ingredient { Name = "Maize", CostPerUnit = 0.20m, CrudeProteinPct = 8.5, FatPct = 3.5, LysinePct = 0.25, AshPct = 1.5, ME = 3300 },
-                    new Ingredient { Name = "Soybean Meal", CostPerUnit = 0.35m, CrudeProteinPct = 44.0, FatPct = 1.5, LysinePct = 2.8, AshPct = 6.0, ME = 2200 },
-                    new Ingredient { Name = "Mustard Meal", CostPerUnit = 0.25m, CrudeProteinPct = 35.0, FatPct = 8.0, LysinePct = 1.5, AshPct = 7.0, ME = 2800 },
-                    // Adding Oil to satisfy high Energy requirements while allowing other ingredients to meet Protein
-                    new Ingredient { Name = "Vegetable Oil", CostPerUnit = 0.90m, CrudeProteinPct = 0.0, FatPct = 100.0, LysinePct = 0.0, AshPct = 0.0, ME = 8800 }
-                },
-                Constraints = new List<NutrientConstraint>
-                {
-                    // Relaxing constraints slightly to ensure feasibility
-                    new NutrientConstraint { NutrientName = "Crude Protein", MinValue = 20.0, MaxValue = 24.0 }, 
-                    new NutrientConstraint { NutrientName = "Fat", MinValue = 3.0, MaxValue = 10.0 },
-                    new NutrientConstraint { NutrientName = "Lysine", MinValue = 1.0, MaxValue = 1.5 },
-                    new NutrientConstraint { NutrientName = "Ash", MinValue = 0.0, MaxValue = 8.0 },
-                    new NutrientConstraint { NutrientName = "ME", MinValue = 2800, MaxValue = 3200 }
-                },
-                BatchSize = 1000
-            };
-            return View(model);
+            return View(BuildDefaultModel());
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Calculate(FeedFormulationViewModel model)
         {
+            // Repair Ids / nutrient slots for anything the client added dynamically
+            // before we validate or render.
+            model.Normalize();
+
             if (model.Ingredients == null || model.Ingredients.Count == 0)
             {
                 ModelState.AddModelError(string.Empty, "Please add at least one ingredient.");
+            }
+
+            if (model.NutrientDefinitions == null || model.NutrientDefinitions.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "Please define at least one nutrient.");
             }
 
             // Re-render the form (with validation messages) instead of running the
@@ -81,6 +70,65 @@ namespace FeedCraft_v0.Controllers
 
             // Nothing to show (e.g. direct navigation) — start a fresh form.
             return RedirectToAction(nameof(Index));
+        }
+
+        /// <summary>
+        /// Seed data. Nutrients are now rows rather than properties, so this list
+        /// is the only place the default five are named.
+        /// </summary>
+        private static FeedFormulationViewModel BuildDefaultModel()
+        {
+            var nutrients = new List<NutrientDefinition>
+            {
+                new NutrientDefinition { Id = 1, Name = "Crude Protein", Unit = "%",       IsPercentage = true  },
+                new NutrientDefinition { Id = 2, Name = "Fat",           Unit = "%",       IsPercentage = true  },
+                new NutrientDefinition { Id = 3, Name = "Lysine",        Unit = "%",       IsPercentage = true  },
+                new NutrientDefinition { Id = 4, Name = "Ash",           Unit = "%",       IsPercentage = true  },
+                new NutrientDefinition { Id = 5, Name = "ME",            Unit = "kcal/kg", IsPercentage = false }
+            };
+
+            // Values are in nutrient-definition order: CP, Fat, Lysine, Ash, ME.
+            var model = new FeedFormulationViewModel
+            {
+                NutrientDefinitions = nutrients,
+                Ingredients = new List<Ingredient>
+                {
+                    MakeIngredient(1, "Maize",         0.20m, nutrients, 8.5,  3.5,   0.25, 1.5, 3300),
+                    MakeIngredient(2, "Soybean Meal",  0.35m, nutrients, 44.0, 1.5,   2.8,  6.0, 2200),
+                    MakeIngredient(3, "Mustard Meal",  0.25m, nutrients, 35.0, 8.0,   1.5,  7.0, 2800),
+                    // Oil satisfies high energy requirements while letting other ingredients meet protein
+                    MakeIngredient(4, "Vegetable Oil", 0.90m, nutrients, 0.0,  100.0, 0.0,  0.0, 8800)
+                },
+                Constraints = new List<NutrientConstraint>
+                {
+                    new NutrientConstraint { NutrientDefinitionId = 1, MinValue = 20.0,   MaxValue = 24.0   },
+                    new NutrientConstraint { NutrientDefinitionId = 2, MinValue = 3.0,    MaxValue = 10.0   },
+                    new NutrientConstraint { NutrientDefinitionId = 3, MinValue = 1.0,    MaxValue = 1.5    },
+                    new NutrientConstraint { NutrientDefinitionId = 4, MinValue = 0.0,    MaxValue = 8.0    },
+                    new NutrientConstraint { NutrientDefinitionId = 5, MinValue = 2800.0, MaxValue = 3200.0 }
+                },
+                BatchSize = 1000
+            };
+
+            model.Normalize();
+            return model;
+        }
+
+        private static Ingredient MakeIngredient(int id, string name, decimal cost,
+            List<NutrientDefinition> nutrients, params double[] values)
+        {
+            var ingredient = new Ingredient { Id = id, Name = name, CostPerUnit = cost };
+
+            ingredient.NutrientValues = nutrients
+                .Select((nutrient, index) => new IngredientNutrientValue
+                {
+                    IngredientId = id,
+                    NutrientDefinitionId = nutrient.Id,
+                    Value = index < values.Length ? values[index] : 0.0
+                })
+                .ToList();
+
+            return ingredient;
         }
     }
 }

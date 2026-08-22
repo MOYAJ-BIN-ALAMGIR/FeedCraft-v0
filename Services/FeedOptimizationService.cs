@@ -10,6 +10,9 @@ namespace FeedCraft_v0.Services
     {
         public FeedFormulationViewModel OptimizeFeed(FeedFormulationViewModel model)
         {
+            // Make sure Ids and nutrient-value slots are consistent before we build the LP.
+            model.Normalize();
+
             // 0. Validate per-ingredient inclusion limits before touching the solver.
             //    (Null Min => 0%, null Max => 100%.) A Max below Min is unsolvable, so
             //    report it as a model error rather than handing bad bounds to OR-Tools.
@@ -24,6 +27,44 @@ namespace FeedCraft_v0.Services
                         $"Ingredient \"{ingredient.Name}\": maximum inclusion ({maxPct:0.##}%) " +
                         $"cannot be less than minimum inclusion ({minPct:0.##}%).";
                     return model;
+                }
+            }
+
+            // 0b. Percentage nutrients must stay within 0–100: no single component can make up
+            //     more than all of an ingredient. This is where IsPercentage carries real weight —
+            //     it excludes absolute units, where ME = 3300 kcal/kg is perfectly normal.
+            //
+            //     Note we deliberately check each value individually and do NOT require the
+            //     percentages to sum to <= 100 within an ingredient: nutrients nest (Lysine is
+            //     part of Crude Protein), so a sum check would reject valid feed data.
+            foreach (var nutrient in model.NutrientDefinitions.Where(n => n.IsPercentage))
+            {
+                foreach (var ingredient in model.Ingredients)
+                {
+                    double value = ingredient.GetNutrientValue(nutrient.Id);
+                    if (value < 0.0 || value > 100.0)
+                    {
+                        model.IsSolved = false;
+                        model.ErrorMessage =
+                            $"\"{ingredient.Name}\" has {nutrient.Name} = {value:0.##}{nutrient.Unit}. " +
+                            $"{nutrient.Name} is marked as a percentage, so it must be between 0 and 100. " +
+                            $"Untick \"Is %\" if it is an absolute unit.";
+                        return model;
+                    }
+                }
+
+                var bounds = model.FindConstraint(nutrient.Id);
+                double?[] limits = { bounds?.MinValue, bounds?.MaxValue };
+                foreach (var limit in limits)
+                {
+                    if (limit.HasValue && (limit.Value < 0.0 || limit.Value > 100.0))
+                    {
+                        model.IsSolved = false;
+                        model.ErrorMessage =
+                            $"{nutrient.Name} target of {limit.Value:0.##} is out of range. " +
+                            $"{nutrient.Name} is marked as a percentage, so its Min and Max must be between 0 and 100.";
+                        return model;
+                    }
                 }
             }
 
@@ -58,10 +99,15 @@ namespace FeedCraft_v0.Services
                 totalWeight.SetCoefficient(x[i], 1);
             }
 
-            // 3b. Nutrient Constraints
+            // 3b. Nutrient Constraints — driven entirely by the nutrient definitions,
+            //     so a new nutrient participates in the LP with no code changes.
             foreach (var constraint in model.Constraints)
             {
-                AddConstraint(solver, x, model.Ingredients, constraint.NutrientName, constraint.MinValue, constraint.MaxValue, model.BatchSize);
+                var nutrient = model.FindNutrient(constraint.NutrientDefinitionId);
+                if (nutrient == null) continue; // orphaned constraint; Normalize() drops these
+
+                AddNutrientConstraint(solver, x, model.Ingredients, nutrient,
+                                      constraint.MinValue, constraint.MaxValue, model.BatchSize);
             }
 
             // 4. Define Objective Function: Minimize Cost
@@ -80,26 +126,26 @@ namespace FeedCraft_v0.Services
             {
                 model.IsSolved = true;
                 model.TotalCost = (decimal)objective.Value();
-                model.OptimizedQuantities = new Dictionary<string, double>();
-                
+                model.OptimizedQuantities = new Dictionary<int, double>();
+
                 for (int i = 0; i < model.Ingredients.Count; i++)
                 {
-                    model.OptimizedQuantities[model.Ingredients[i].Name] = x[i].SolutionValue();
+                    model.OptimizedQuantities[model.Ingredients[i].Id] = x[i].SolutionValue();
                 }
 
-                // Calculate resulting nutrient values
-                model.CalculatedNutrients = new Dictionary<string, double>();
-                foreach (var constraint in model.Constraints)
+                // Resulting nutrient levels, for every defined nutrient — including
+                // ones with no min/max, so they can still be inspected.
+                model.CalculatedNutrients = new Dictionary<int, double>();
+                foreach (var nutrient in model.NutrientDefinitions)
                 {
                     double totalNutrientAmount = 0;
                     for (int i = 0; i < model.Ingredients.Count; i++)
                     {
                         double quantity = x[i].SolutionValue();
-                        double nutrientValue = GetNutrientValue(model.Ingredients[i], constraint.NutrientName);
-                        totalNutrientAmount += quantity * nutrientValue;
+                        totalNutrientAmount += quantity * model.Ingredients[i].GetNutrientValue(nutrient.Id);
                     }
-                    // The result is the weighted average per unit (e.g. % or kcal/kg)
-                    model.CalculatedNutrients[constraint.NutrientName] = totalNutrientAmount / model.BatchSize;
+                    // Weighted average per unit of batch (e.g. % or kcal/kg).
+                    model.CalculatedNutrients[nutrient.Id] = totalNutrientAmount / model.BatchSize;
                 }
 
                 model.ErrorMessage = string.Empty;
@@ -113,73 +159,34 @@ namespace FeedCraft_v0.Services
             return model;
         }
 
-        private void AddConstraint(Solver solver, Variable[] x, List<Ingredient> ingredients, string nutrientName, double? minPerUnit, double? maxPerUnit, double batchSize)
+        private void AddNutrientConstraint(Solver solver, Variable[] x, List<Ingredient> ingredients,
+            NutrientDefinition nutrient, double? minPerUnit, double? maxPerUnit, double batchSize)
         {
             if (!minPerUnit.HasValue && !maxPerUnit.HasValue) return;
 
-            // Determine if the nutrient is percentage-based or absolute per unit (like ME kcal/kg)
-            bool isPercentage = !nutrientName.Equals("ME", StringComparison.OrdinalIgnoreCase) && !nutrientName.Equals("Metabolizable Energy", StringComparison.OrdinalIgnoreCase);
+            // The constraint itself is unit-agnostic: min/max are expressed in the same unit as the
+            // ingredient values, so this works for "%" and "kcal/kg" alike without conversion.
+            //
+            //   Sum( value_i * x_i )  in  [ min * batchSize , max * batchSize ]
+            //
+            // Dividing through by batchSize shows what this means: the batch's weighted-average
+            // nutrient level must sit between min and max. IsPercentage deliberately does not
+            // appear here — scaling both the coefficients and the bounds by 100 would cancel out.
+            // It is enforced as a range check before the solve instead (see step 0b).
+            double lowerBound = minPerUnit.HasValue
+                ? minPerUnit.Value * batchSize
+                : double.NegativeInfinity;
 
-            double lowerBound = double.NegativeInfinity;
-            double upperBound = double.PositiveInfinity;
-
-            // If it's a percentage (e.g. 22%), the total amount required is (22/100) * BatchSize.
-            // If it's absolute (e.g. 3000 kcal/kg), the total amount required is 3000 * BatchSize.
-            
-            if (minPerUnit.HasValue)
-            {
-                lowerBound = isPercentage 
-                    ? (minPerUnit.Value / 100.0) * batchSize 
-                    : minPerUnit.Value * batchSize;
-            }
-
-            if (maxPerUnit.HasValue)
-            {
-                upperBound = isPercentage 
-                    ? (maxPerUnit.Value / 100.0) * batchSize 
-                    : maxPerUnit.Value * batchSize;
-            }
+            double upperBound = maxPerUnit.HasValue
+                ? maxPerUnit.Value * batchSize
+                : double.PositiveInfinity;
 
             Constraint constraint = solver.MakeConstraint(lowerBound, upperBound);
-            
+
             for (int i = 0; i < ingredients.Count; i++)
             {
-                double val = GetNutrientValue(ingredients[i], nutrientName);
-                
-                // If ingredient has 22% CP, the value is 22.
-                // The constraint is Sum( (val/100) * x_i ) >= (Min/100)*BatchSize
-                // Or simply Sum( val * x_i ) >= Min * BatchSize?
-                // Let's stick to mass units. 
-                // LHS: Sum of nutrient mass. 
-                // If x_i is kg, and val is %, then nutrient mass = (val/100) * x_i.
-                // RHS: Total nutrient mass required = (Min/100) * BatchSize.
-                
-                if (isPercentage)
-                {
-                    constraint.SetCoefficient(x[i], val / 100.0);
-                }
-                else
-                {
-                    // For ME (kcal/kg):
-                    // LHS: Sum( ME_i * x_i ) = Total Kcal.
-                    // RHS: Min_ME * BatchSize.
-                    constraint.SetCoefficient(x[i], val);
-                }
+                constraint.SetCoefficient(x[i], ingredients[i].GetNutrientValue(nutrient.Id));
             }
-        }
-
-        private double GetNutrientValue(Ingredient ingredient, string nutrientName)
-        {
-            // Normalize name
-            string name = nutrientName.ToLower().Replace(" ", "");
-            
-            if (name.Contains("protein") || name == "cp") return ingredient.CrudeProteinPct;
-            if (name.Contains("fat")) return ingredient.FatPct;
-            if (name.Contains("lysine")) return ingredient.LysinePct;
-            if (name.Contains("ash")) return ingredient.AshPct;
-            if (name == "me" || name.Contains("energy")) return ingredient.ME;
-            
-            return 0.0;
         }
     }
 }
