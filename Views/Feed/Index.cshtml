@@ -19,15 +19,20 @@
                         <th>Ingredient</th>
                         <th>Quantity (kg)</th>
                         <th>% of Batch</th>
+                        <th>Limit (Min&ndash;Max %)</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var kvp in Model.OptimizedQuantities)
                     {
+                        var ing = Model.Ingredients.FirstOrDefault(x => x.Name == kvp.Key);
+                        var minLbl = (ing?.MinInclusionPct ?? 0).ToString("0.##");
+                        var maxLbl = (ing?.MaxInclusionPct ?? 100).ToString("0.##");
                         <tr>
                             <td>@kvp.Key</td>
                             <td>@kvp.Value.ToString("F2")</td>
                             <td>@((kvp.Value / Model.BatchSize * 100).ToString("F2"))%</td>
+                            <td>@minLbl &ndash; @maxLbl</td>
                         </tr>
                     }
                 </tbody>
@@ -102,6 +107,8 @@
                                 <th>Lysine (%)</th>
                                 <th>Ash (%)</th>
                                 <th>ME (kcal/kg)</th>
+                                <th>Min %</th>
+                                <th>Max %</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -116,6 +123,8 @@
                                     <td><input asp-for="Ingredients[i].LysinePct" class="form-control" step="0.01" /></td>
                                     <td><input asp-for="Ingredients[i].AshPct" class="form-control" step="0.1" /></td>
                                     <td><input asp-for="Ingredients[i].ME" class="form-control" step="1" /></td>
+                                    <td><input asp-for="Ingredients[i].MinInclusionPct" class="form-control" step="0.1" placeholder="0" /></td>
+                                    <td><input asp-for="Ingredients[i].MaxInclusionPct" class="form-control" step="0.1" placeholder="100" /></td>
                                     <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>
                                 </tr>
                             }
@@ -196,8 +205,14 @@
 
             var cellME = row.insertCell(6);
             cellME.innerHTML = '<input name="Ingredients[' + index + '].ME" class="form-control" type="number" step="1" value="0" />';
-            
-            var cellAction = row.insertCell(7);
+
+            var cellMin = row.insertCell(7);
+            cellMin.innerHTML = '<input name="Ingredients[' + index + '].MinInclusionPct" class="form-control" type="number" step="0.1" placeholder="0" />';
+
+            var cellMax = row.insertCell(8);
+            cellMax.innerHTML = '<input name="Ingredients[' + index + '].MaxInclusionPct" class="form-control" type="number" step="0.1" placeholder="100" value="100" />';
+
+            var cellAction = row.insertCell(9);
             cellAction.innerHTML = '<button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button>';
         }
 

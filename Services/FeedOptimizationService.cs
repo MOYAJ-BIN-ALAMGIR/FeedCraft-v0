@@ -10,6 +10,23 @@ namespace FeedCraft_v0.Services
     {
         public FeedFormulationViewModel OptimizeFeed(FeedFormulationViewModel model)
         {
+            // 0. Validate per-ingredient inclusion limits before touching the solver.
+            //    (Null Min => 0%, null Max => 100%.) A Max below Min is unsolvable, so
+            //    report it as a model error rather than handing bad bounds to OR-Tools.
+            foreach (var ingredient in model.Ingredients)
+            {
+                double minPct = ingredient.MinInclusionPct ?? 0.0;
+                double maxPct = ingredient.MaxInclusionPct ?? 100.0;
+                if (maxPct < minPct)
+                {
+                    model.IsSolved = false;
+                    model.ErrorMessage =
+                        $"Ingredient \"{ingredient.Name}\": maximum inclusion ({maxPct:0.##}%) " +
+                        $"cannot be less than minimum inclusion ({minPct:0.##}%).";
+                    return model;
+                }
+            }
+
             // 1. Create the solver
             Solver solver = Solver.CreateSolver("GLOP");
             if (solver == null)
@@ -20,12 +37,16 @@ namespace FeedCraft_v0.Services
             }
 
             // 2. Define Variables
-            // x[i] represents the quantity of ingredient i
+            // x[i] represents the quantity of ingredient i, bounded by its inclusion limits:
+            //   lower = (MinInclusionPct/100) * BatchSize,  upper = (MaxInclusionPct/100) * BatchSize
             Variable[] x = new Variable[model.Ingredients.Count];
             for (int i = 0; i < model.Ingredients.Count; i++)
             {
-                // Quantity must be non-negative
-                x[i] = solver.MakeNumVar(0.0, double.PositiveInfinity, model.Ingredients[i].Name);
+                double minPct = model.Ingredients[i].MinInclusionPct ?? 0.0;
+                double maxPct = model.Ingredients[i].MaxInclusionPct ?? 100.0;
+                double lowerBound = (minPct / 100.0) * model.BatchSize;
+                double upperBound = (maxPct / 100.0) * model.BatchSize;
+                x[i] = solver.MakeNumVar(lowerBound, upperBound, model.Ingredients[i].Name);
             }
 
             // 3. Define Constraints
