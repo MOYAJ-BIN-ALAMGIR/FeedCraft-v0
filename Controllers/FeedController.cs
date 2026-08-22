@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using FeedCraft_v0.Models;
 using FeedCraft_v0.Services;
 using System.Collections.Generic;
+using System.Text.Json;
 
 namespace FeedCraft_v0.Controllers
 {
@@ -42,16 +43,44 @@ namespace FeedCraft_v0.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public IActionResult Calculate(FeedFormulationViewModel model)
         {
             if (model.Ingredients == null || model.Ingredients.Count == 0)
             {
-                ModelState.AddModelError("", "Please add at least one ingredient.");
+                ModelState.AddModelError(string.Empty, "Please add at least one ingredient.");
+            }
+
+            // Re-render the form (with validation messages) instead of running the
+            // solver on invalid input — this is what prevents the zero-batch-size NaN.
+            if (!ModelState.IsValid)
+            {
                 return View("Index", model);
             }
 
             var result = _optimizer.OptimizeFeed(model);
-            return View("Index", result);
+
+            // Post-Redirect-Get: stash the result and redirect so a refresh (F5)
+            // re-issues a GET instead of re-submitting the form.
+            TempData["FormulationResult"] = JsonSerializer.Serialize(result);
+            return RedirectToAction(nameof(Result));
+        }
+
+        [HttpGet]
+        public IActionResult Result()
+        {
+            // Peek (not read-once) so refreshing the results page keeps showing them.
+            if (TempData.Peek("FormulationResult") is string json)
+            {
+                var model = JsonSerializer.Deserialize<FeedFormulationViewModel>(json);
+                if (model != null)
+                {
+                    return View("Index", model);
+                }
+            }
+
+            // Nothing to show (e.g. direct navigation) — start a fresh form.
+            return RedirectToAction(nameof(Index));
         }
     }
 }

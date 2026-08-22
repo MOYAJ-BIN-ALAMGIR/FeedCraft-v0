@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace FeedCraft_v0.Models
 {
@@ -6,6 +7,8 @@ namespace FeedCraft_v0.Models
     {
         public List<Ingredient> Ingredients { get; set; } = new List<Ingredient>();
         public List<NutrientConstraint> Constraints { get; set; } = new List<NutrientConstraint>();
+
+        [Range(0.01, double.MaxValue, ErrorMessage = "Batch size must be greater than 0.")]
         public double BatchSize { get; set; } = 1000.0; // Default 1000 kg
 
         // Results

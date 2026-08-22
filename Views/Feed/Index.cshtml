@@ -68,7 +68,9 @@
     }
 
     <form asp-action="Calculate" method="post" id="feedForm">
-        
+
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
         <div class="card mb-4">
             <div class="card-header">
                 <h5>Batch Settings</h5>
@@ -159,6 +161,7 @@
 </div>
 
 @section Scripts {
+    <partial name="_ValidationScriptsPartial" />
     <script>
         function addIngredientRow() {
             var table = document.getElementById("ingredientsTable").getElementsByTagName('tbody')[0];
