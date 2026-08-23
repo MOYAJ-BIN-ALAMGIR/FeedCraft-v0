@@ -1,0 +1,82 @@
+@model FeedCraft.Web.Models.IngredientEditViewModel
+
+@* Shared editor for Create and Edit. The enclosing <form> lives in the parent view. *@
+
+<div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+@if (Model.IsEdit)
+{
+    <input type="hidden" asp-for="Ingredient.Id" />
+}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Details</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3 row">
+            <label asp-for="Ingredient.Name" class="col-sm-3 col-form-label">Name</label>
+            <div class="col-sm-5">
+                <input asp-for="Ingredient.Name" class="form-control" />
+                <span asp-validation-for="Ingredient.Name" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label asp-for="Ingredient.CostPerUnit" class="col-sm-3 col-form-label">Cost per unit</label>
+            <div class="col-sm-5">
+                <input asp-for="Ingredient.CostPerUnit" class="form-control" step="0.01" />
+                <span asp-validation-for="Ingredient.CostPerUnit" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label asp-for="Ingredient.MinInclusionPct" class="col-sm-3 col-form-label">Min inclusion %</label>
+            <div class="col-sm-5">
+                <input asp-for="Ingredient.MinInclusionPct" class="form-control" step="0.1" placeholder="0" />
+                <span asp-validation-for="Ingredient.MinInclusionPct" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label asp-for="Ingredient.MaxInclusionPct" class="col-sm-3 col-form-label">Max inclusion %</label>
+            <div class="col-sm-5">
+                <input asp-for="Ingredient.MaxInclusionPct" class="form-control" step="0.1" placeholder="100" />
+                <span asp-validation-for="Ingredient.MaxInclusionPct" class="text-danger"></span>
+            </div>
+        </div>
+
+        <p class="text-muted small mb-0">
+            Leave the inclusion limits blank for no bound &mdash; a blank min is read as 0%,
+            a blank max as 100%.
+        </p>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Nutrient Values</h5>
+    </div>
+    <div class="card-body">
+        @* One input per nutrient definition, in the same order the formulation table uses.
+           The hidden NutrientDefinitionId is what the controller matches readings on, so
+           the row stays correct even if a nutrient is added later. *@
+        @for (int k = 0; k < Model.Ingredient.NutrientValues.Count; k++)
+        {
+            var nutrient = Model.Nutrients
+                .FirstOrDefault(n => n.Id == Model.Ingredient.NutrientValues[k].NutrientDefinitionId);
+
+            <div class="mb-3 row">
+                <label class="col-sm-3 col-form-label">
+                    @(nutrient?.Name ?? "Nutrient")
+                    <span class="text-muted">(@(nutrient?.Unit ?? ""))</span>
+                </label>
+                <div class="col-sm-5">
+                    <input type="hidden" asp-for="Ingredient.NutrientValues[k].NutrientDefinitionId" />
+                    <input asp-for="Ingredient.NutrientValues[k].Value" class="form-control" step="0.01" />
+                    <span asp-validation-for="Ingredient.NutrientValues[k].Value" class="text-danger"></span>
+                </div>
+            </div>
+        }
+    </div>
+</div>

@@ -1,11 +1,27 @@
 @model FeedCraft.Domain.Models.FeedFormulationViewModel
+@using FeedCraft.Web.Models
 
 @{
     ViewData["Title"] = "Feed Formulation";
+    var savedFormulations = ViewData["SavedFormulations"] as List<SavedFormulationSummary>
+        ?? new List<SavedFormulationSummary>();
 }
 
 <div class="container mt-4">
     <h2 class="mb-4">Least-Cost Feed Formulation</h2>
+
+    @if (TempData["LibraryMessage"] is string libraryMessage)
+    {
+        <div class="alert alert-info">@libraryMessage</div>
+    }
+
+    @if (ViewData["LoadedFormulation"] is string loadedName)
+    {
+        <div class="alert alert-secondary">
+            Loaded saved formulation <strong>@loadedName</strong>. Editing the form below does
+            not change the saved copy &mdash; save again to store a new snapshot.
+        </div>
+    }
 
     @if (Model.IsSolved)
     {
@@ -72,6 +88,39 @@
             <p>@Model.ErrorMessage</p>
         </div>
     }
+
+    @* A sibling of #feedForm, never nested inside it — nested forms are invalid HTML and
+       the inner one is silently dropped by the browser. *@
+    <form asp-action="Load" method="get" class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Saved Formulations</h5>
+        </div>
+        <div class="card-body">
+            @if (savedFormulations.Count == 0)
+            {
+                <p class="text-muted mb-0">
+                    Nothing saved yet. Fill in the form below, give it a name and press
+                    <em>Save Formulation</em>.
+                </p>
+            }
+            else
+            {
+                <div class="row g-2 align-items-center">
+                    <div class="col-sm-6">
+                        <select name="id" class="form-select" aria-label="Saved formulation">
+                            @foreach (var item in savedFormulations)
+                            {
+                                <option value="@item.Id">@item.Name &mdash; @item.CreatedAt.ToString("g")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-3">
+                        <button type="submit" class="btn btn-outline-secondary">Load Formulation</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </form>
 
     <form asp-action="Calculate" method="post" id="feedForm">
 
@@ -197,6 +246,32 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Save This Formulation</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 align-items-center">
+                    <div class="col-sm-6">
+                        <input asp-for="SaveName" class="form-control" placeholder="e.g. Broiler starter, Aug 2026" />
+                        <span asp-validation-for="SaveName" class="text-danger"></span>
+                    </div>
+                    <div class="col-sm-4">
+                        @* formaction/formmethod retarget this one button at Save, so the live
+                           form state and its antiforgery token are reused as-is. *@
+                        <button type="submit" class="btn btn-outline-success"
+                                formaction="@Url.Action("Save")" formmethod="post">
+                            Save Formulation
+                        </button>
+                    </div>
+                </div>
+                <p class="text-muted small mb-0 mt-2">
+                    Saves the inputs above together with the results they produce, as a snapshot.
+                    Later edits to the ingredient library will not change it.
+                </p>
             </div>
         </div>
 

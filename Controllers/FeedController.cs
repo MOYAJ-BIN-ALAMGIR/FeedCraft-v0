@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using FeedCraft.Domain.Models;
 using FeedCraft.Domain.Services;
+using FeedCraft.Infrastructure.Data;
+using FeedCraft.Web.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -10,16 +14,19 @@ namespace FeedCraft.Web.Controllers
     public class FeedController : Controller
     {
         private readonly IFeedOptimizationService _optimizer;
+        private readonly FeedCraftDbContext _db;
 
-        public FeedController(IFeedOptimizationService optimizer)
+        public FeedController(IFeedOptimizationService optimizer, FeedCraftDbContext db)
         {
             _optimizer = optimizer;
+            _db = db;
         }
 
         [HttpGet]
         public IActionResult Index()
         {
-            return View(BuildDefaultModel());
+            LoadSavedFormulations();
+            return View(BuildModelFromLibrary());
         }
 
         [HttpPost]
@@ -30,20 +37,11 @@ namespace FeedCraft.Web.Controllers
             // before we validate or render.
             model.Normalize();
 
-            if (model.Ingredients == null || model.Ingredients.Count == 0)
+            if (!ValidateFormulation(model))
             {
-                ModelState.AddModelError(string.Empty, "Please add at least one ingredient.");
-            }
-
-            if (model.NutrientDefinitions == null || model.NutrientDefinitions.Count == 0)
-            {
-                ModelState.AddModelError(string.Empty, "Please define at least one nutrient.");
-            }
-
-            // Re-render the form (with validation messages) instead of running the
-            // solver on invalid input — this is what prevents the zero-batch-size NaN.
-            if (!ModelState.IsValid)
-            {
+                // Re-render the form (with validation messages) instead of running the
+                // solver on invalid input — this is what prevents the zero-batch-size NaN.
+                LoadSavedFormulations();
                 return View("Index", model);
             }
 
@@ -64,6 +62,7 @@ namespace FeedCraft.Web.Controllers
                 var model = JsonSerializer.Deserialize<FeedFormulationViewModel>(json);
                 if (model != null)
                 {
+                    LoadSavedFormulations();
                     return View("Index", model);
                 }
             }
@@ -73,40 +72,149 @@ namespace FeedCraft.Web.Controllers
         }
 
         /// <summary>
-        /// Seed data. Nutrients are now rows rather than properties, so this list
-        /// is the only place the default five are named.
+        /// Persists the form exactly as submitted, together with the results it produces.
+        /// The solver runs again here because the form posts inputs only — results are
+        /// rendered output, not form fields — so re-solving is what guarantees the saved
+        /// results actually belong to the saved inputs.
         /// </summary>
-        private static FeedFormulationViewModel BuildDefaultModel()
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Save(FeedFormulationViewModel model)
         {
-            var nutrients = new List<NutrientDefinition>
+            model.Normalize();
+
+            if (string.IsNullOrWhiteSpace(model.SaveName))
             {
-                new NutrientDefinition { Id = 1, Name = "Crude Protein", Unit = "%",       IsPercentage = true  },
-                new NutrientDefinition { Id = 2, Name = "Fat",           Unit = "%",       IsPercentage = true  },
-                new NutrientDefinition { Id = 3, Name = "Lysine",        Unit = "%",       IsPercentage = true  },
-                new NutrientDefinition { Id = 4, Name = "Ash",           Unit = "%",       IsPercentage = true  },
-                new NutrientDefinition { Id = 5, Name = "ME",            Unit = "kcal/kg", IsPercentage = false }
+                ModelState.AddModelError(nameof(model.SaveName),
+                    "Enter a name before saving this formulation.");
+            }
+
+            if (!ValidateFormulation(model))
+            {
+                LoadSavedFormulations();
+                return View("Index", model);
+            }
+
+            // Serialise the inputs *before* solving, so the snapshot's input half stays
+            // free of result data.
+            var inputsJson = JsonSerializer.Serialize(model);
+
+            var result = _optimizer.OptimizeFeed(model);
+
+            var saved = new SavedFormulation
+            {
+                Name = model.SaveName!.Trim(),
+                CreatedAt = DateTime.Now,
+                InputsJson = inputsJson,
+                ResultsJson = JsonSerializer.Serialize(new FormulationResults
+                {
+                    IsSolved = result.IsSolved,
+                    TotalCost = result.TotalCost,
+                    OptimizedQuantities = result.OptimizedQuantities,
+                    CalculatedNutrients = result.CalculatedNutrients,
+                    ErrorMessage = result.ErrorMessage
+                })
             };
 
-            // Values are in nutrient-definition order: CP, Fat, Lysine, Ash, ME.
+            _db.SavedFormulations.Add(saved);
+            _db.SaveChanges();
+
+            TempData["FormulationResult"] = JsonSerializer.Serialize(result);
+            TempData["LibraryMessage"] = $"Saved formulation \"{saved.Name}\".";
+            return RedirectToAction(nameof(Result));
+        }
+
+        /// <summary>
+        /// Rebuilds the form from a saved snapshot. Read-only by construction: the row is
+        /// fetched with AsNoTracking() and the view model is not an entity, so loading a
+        /// formulation can never write anything back.
+        /// </summary>
+        [HttpGet]
+        public IActionResult Load(int id)
+        {
+            var saved = _db.SavedFormulations
+                .AsNoTracking()
+                .FirstOrDefault(s => s.Id == id);
+
+            if (saved == null)
+            {
+                TempData["LibraryMessage"] = "That saved formulation no longer exists.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var model = JsonSerializer.Deserialize<FeedFormulationViewModel>(saved.InputsJson);
+            if (model == null)
+            {
+                TempData["LibraryMessage"] = $"Could not read the snapshot for \"{saved.Name}\".";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var results = JsonSerializer.Deserialize<FormulationResults>(saved.ResultsJson);
+            if (results != null)
+            {
+                model.IsSolved = results.IsSolved;
+                model.TotalCost = results.TotalCost;
+                model.OptimizedQuantities = results.OptimizedQuantities;
+                model.CalculatedNutrients = results.CalculatedNutrients;
+                model.ErrorMessage = results.ErrorMessage;
+            }
+
+            model.SaveName = saved.Name;
+
+            // The snapshot already holds consistent Ids; this only re-sorts and gap-fills.
+            model.Normalize();
+
+            LoadSavedFormulations();
+            ViewData["LoadedFormulation"] = $"{saved.Name} (saved {saved.CreatedAt:g})";
+            return View("Index", model);
+        }
+
+        /// <summary>
+        /// Shared guard for Calculate and Save. Returns true when the model is fit to solve.
+        /// </summary>
+        private bool ValidateFormulation(FeedFormulationViewModel model)
+        {
+            if (model.Ingredients == null || model.Ingredients.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "Please add at least one ingredient.");
+            }
+
+            if (model.NutrientDefinitions == null || model.NutrientDefinitions.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "Please define at least one nutrient.");
+            }
+
+            return ModelState.IsValid;
+        }
+
+        /// <summary>
+        /// Reads the starting formulation out of the ingredient library.
+        ///
+        /// AsNoTracking() is essential: this becomes a detached working copy that the user
+        /// edits freely in the browser, and Normalize() reassigns Ids for rows added
+        /// client-side. Tracked entities would push those edits back into the library.
+        /// </summary>
+        private FeedFormulationViewModel BuildModelFromLibrary()
+        {
             var model = new FeedFormulationViewModel
             {
-                NutrientDefinitions = nutrients,
-                Ingredients = new List<Ingredient>
-                {
-                    MakeIngredient(1, "Maize",         0.20m, nutrients, 8.5,  3.5,   0.25, 1.5, 3300),
-                    MakeIngredient(2, "Soybean Meal",  0.35m, nutrients, 44.0, 1.5,   2.8,  6.0, 2200),
-                    MakeIngredient(3, "Mustard Meal",  0.25m, nutrients, 35.0, 8.0,   1.5,  7.0, 2800),
-                    // Oil satisfies high energy requirements while letting other ingredients meet protein
-                    MakeIngredient(4, "Vegetable Oil", 0.90m, nutrients, 0.0,  100.0, 0.0,  0.0, 8800)
-                },
-                Constraints = new List<NutrientConstraint>
-                {
-                    new NutrientConstraint { NutrientDefinitionId = 1, MinValue = 20.0,   MaxValue = 24.0   },
-                    new NutrientConstraint { NutrientDefinitionId = 2, MinValue = 3.0,    MaxValue = 10.0   },
-                    new NutrientConstraint { NutrientDefinitionId = 3, MinValue = 1.0,    MaxValue = 1.5    },
-                    new NutrientConstraint { NutrientDefinitionId = 4, MinValue = 0.0,    MaxValue = 8.0    },
-                    new NutrientConstraint { NutrientDefinitionId = 5, MinValue = 2800.0, MaxValue = 3200.0 }
-                },
+                // Nutrient order drives the ingredient table's columns, so order both reads.
+                NutrientDefinitions = _db.NutrientDefinitions
+                    .AsNoTracking()
+                    .OrderBy(n => n.Id)
+                    .ToList(),
+
+                Ingredients = _db.Ingredients
+                    .AsNoTracking()
+                    .Include(i => i.NutrientValues)
+                    .OrderBy(i => i.Id)
+                    .ToList(),
+
+                Constraints = _db.NutrientConstraints
+                    .AsNoTracking()
+                    .OrderBy(c => c.NutrientDefinitionId)
+                    .ToList(),
+
                 BatchSize = 1000
             };
 
@@ -114,21 +222,20 @@ namespace FeedCraft.Web.Controllers
             return model;
         }
 
-        private static Ingredient MakeIngredient(int id, string name, decimal cost,
-            List<NutrientDefinition> nutrients, params double[] values)
+        /// <summary>Fills the "Load formulation" dropdown, newest first.</summary>
+        private void LoadSavedFormulations()
         {
-            var ingredient = new Ingredient { Id = id, Name = name, CostPerUnit = cost };
-
-            ingredient.NutrientValues = nutrients
-                .Select((nutrient, index) => new IngredientNutrientValue
+            ViewData["SavedFormulations"] = _db.SavedFormulations
+                .AsNoTracking()
+                .OrderByDescending(s => s.CreatedAt)
+                .ThenByDescending(s => s.Id)
+                .Select(s => new SavedFormulationSummary
                 {
-                    IngredientId = id,
-                    NutrientDefinitionId = nutrient.Id,
-                    Value = index < values.Length ? values[index] : 0.0
+                    Id = s.Id,
+                    Name = s.Name,
+                    CreatedAt = s.CreatedAt
                 })
                 .ToList();
-
-            return ingredient;
         }
     }
 }

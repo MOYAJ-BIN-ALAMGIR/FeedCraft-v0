@@ -1,0 +1,77 @@
+@model FeedCraft.Web.Models.IngredientLibraryViewModel
+
+@{
+    ViewData["Title"] = "Ingredient Library";
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">Ingredient Library</h2>
+        <a asp-action="Create" class="btn btn-primary">Add Ingredient</a>
+    </div>
+
+    @if (TempData["LibraryMessage"] is string libraryMessage)
+    {
+        <div class="alert alert-info">@libraryMessage</div>
+    }
+
+    <p class="text-muted">
+        The master list every new formulation starts from. Changes here are saved to the
+        database and survive a restart. Nutrients that a formulation only needs once are
+        still added on the formulation page itself.
+    </p>
+
+    @if (Model.Ingredients.Count == 0)
+    {
+        <div class="alert alert-warning">
+            The library is empty. Add an ingredient before formulating.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Cost/Unit</th>
+                        @foreach (var nutrient in Model.Nutrients)
+                        {
+                            <th>@nutrient.Name (@nutrient.Unit)</th>
+                        }
+                        <th>Min %</th>
+                        <th>Max %</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ingredient in Model.Ingredients)
+                    {
+                        <tr>
+                            <td>@ingredient.Name</td>
+                            <td>$@ingredient.CostPerUnit.ToString("F2")</td>
+                            @foreach (var nutrient in Model.Nutrients)
+                            {
+                                @* GetNutrientValue returns 0 for a nutrient this ingredient has no reading for. *@
+                                <td>@ingredient.GetNutrientValue(nutrient.Id).ToString("0.##")</td>
+                            }
+                            <td>@(ingredient.MinInclusionPct?.ToString("0.##") ?? "0")</td>
+                            <td>@(ingredient.MaxInclusionPct?.ToString("0.##") ?? "100")</td>
+                            <td class="text-nowrap">
+                                <a asp-action="Edit" asp-route-id="@ingredient.Id" class="btn btn-sm btn-outline-primary">Edit</a>
+                                <form asp-action="Delete" asp-route-id="@ingredient.Id" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('Delete @ingredient.Name from the library? Saved formulations keep their own copy.');">
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <a asp-controller="Feed" asp-action="Index" class="btn btn-link px-0">&larr; Back to formulation</a>
+</div>

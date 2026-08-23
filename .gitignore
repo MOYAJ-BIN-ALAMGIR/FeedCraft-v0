@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# SQLite database created at runtime by EF Core migrations
+*.db
+*.db-shm
+*.db-wal

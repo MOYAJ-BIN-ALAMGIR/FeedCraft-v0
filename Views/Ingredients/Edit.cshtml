@@ -1,0 +1,20 @@
+@model FeedCraft.Web.Models.IngredientEditViewModel
+
+@{
+    ViewData["Title"] = "Edit Ingredient";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-4">Edit @Model.Ingredient.Name</h2>
+
+    <form asp-action="Edit" asp-route-id="@Model.Ingredient.Id" method="post">
+        <partial name="_IngredientForm" model="Model" />
+
+        <button type="submit" class="btn btn-success">Save Changes</button>
+        <a asp-action="Index" class="btn btn-link">Cancel</a>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

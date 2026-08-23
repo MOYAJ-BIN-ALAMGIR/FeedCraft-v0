@@ -16,6 +16,14 @@ namespace FeedCraft.Domain.Models
         [Range(0.01, double.MaxValue, ErrorMessage = "Batch size must be greater than 0.")]
         public double BatchSize { get; set; } = 1000.0; // Default 1000 kg
 
+        /// <summary>
+        /// Label used when saving this formulation. Part of the form (rather than a loose
+        /// parameter) so it survives a validation re-render, and so loading a saved
+        /// formulation puts its name back in the box.
+        /// </summary>
+        [StringLength(200, ErrorMessage = "Formulation name must be 200 characters or fewer.")]
+        public string? SaveName { get; set; }
+
         // Results — keyed by Id rather than by name, so duplicate or renamed
         // labels can't collide or silently mismatch.
         public bool IsSolved { get; set; }
