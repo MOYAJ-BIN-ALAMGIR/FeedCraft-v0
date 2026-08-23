@@ -1,0 +1,90 @@
+@model FeedCraft.Web.Models.MarketSearchViewModel
+
+@{
+    ViewData["Title"] = "Market";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-3">Ingredient Market</h2>
+
+    <p class="text-muted">
+        Live prices from registered dealers, cheapest first. No account needed &mdash;
+        searching and comparing is open to everyone.
+    </p>
+
+    @* GET, so a search is a shareable, refreshable URL (?q=corn) rather than a form re-post. *@
+    <form asp-action="Index" method="get" class="card mb-4">
+        <div class="card-body">
+            <div class="row g-2 align-items-center">
+                <div class="col-sm-7">
+                    <input type="text" name="q" value="@Model.Query" class="form-control"
+                           placeholder="Search by ingredient, e.g. Corn" />
+                </div>
+                <div class="col-sm-5">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    @if (Model.HasQuery)
+                    {
+                        <a asp-action="Index" class="btn btn-link">Show all</a>
+                    }
+                </div>
+            </div>
+        </div>
+    </form>
+
+    @if (Model.Results.Count == 0)
+    {
+        <div class="alert alert-warning">
+            @if (Model.HasQuery)
+            {
+                <text>No dealer is currently listing anything matching &ldquo;@Model.Query&rdquo;.</text>
+            }
+            else
+            {
+                <text>No dealers have listed anything yet.</text>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="text-muted small">
+            @Model.Results.Count listing@(Model.Results.Count == 1 ? "" : "s")
+            @if (Model.HasQuery)
+            {
+                <text>matching &ldquo;@Model.Query&rdquo;</text>
+            }
+            &mdash; sorted by price, lowest first.
+        </p>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Ingredient</th>
+                        <th>Price/kg</th>
+                        <th>Dealer contact</th>
+                        <th>Last updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < Model.Results.Count; i++)
+                    {
+                        var listing = Model.Results[i];
+
+                        <tr>
+                            <td>@listing.IngredientName</td>
+                            <td>
+                                $@listing.Price.ToString("F2")
+                                @if (i == 0)
+                                {
+                                    <span class="badge bg-success ms-1">Cheapest</span>
+                                }
+                            </td>
+                            <td>@listing.ContactInfo</td>
+                            <td>@listing.UpdatedAt.ToString("g")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

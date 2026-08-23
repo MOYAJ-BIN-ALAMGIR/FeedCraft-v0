@@ -1,4 +1,6 @@
 using FeedCraft.Domain.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace FeedCraft.Infrastructure.Data
@@ -18,9 +20,20 @@ namespace FeedCraft.Infrastructure.Data
     ///    entity and appears in no DbSet — it is a detached working copy read via
     ///    AsNoTracking(). Its Normalize() reassigns Ids for rows added client-side, which
     ///    would corrupt library rows if it were ever attached.
+    ///
+    /// Since Step 6 this also hosts ASP.NET Core Identity (one database, one migration chain).
+    /// DealerListing's foreign key to AspNetUsers is configured *here* rather than as a
+    /// navigation property on the entity, so FeedCraft.Domain needs no Identity reference.
     /// </summary>
-    public class FeedCraftDbContext : DbContext
+    public class FeedCraftDbContext : IdentityDbContext<IdentityUser>
     {
+        /// <summary>
+        /// The one role in the app. Kept as a const next to the seed that creates it so the
+        /// string in [Authorize(Roles = ...)], in User.IsInRole checks and in the seeded
+        /// NormalizedName can never drift apart.
+        /// </summary>
+        public const string DealerRole = "Dealer";
+
         public FeedCraftDbContext(DbContextOptions<FeedCraftDbContext> options)
             : base(options)
         {
@@ -31,9 +44,12 @@ namespace FeedCraft.Infrastructure.Data
         public DbSet<IngredientNutrientValue> IngredientNutrientValues => Set<IngredientNutrientValue>();
         public DbSet<NutrientConstraint> NutrientConstraints => Set<NutrientConstraint>();
         public DbSet<SavedFormulation> SavedFormulations => Set<SavedFormulation>();
+        public DbSet<DealerListing> DealerListings => Set<DealerListing>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Must run first: this is what maps the seven AspNet* Identity tables. Without it
+            // the base class buys you nothing and the Identity schema silently never appears.
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<NutrientDefinition>(entity =>
@@ -107,7 +123,55 @@ namespace FeedCraft.Infrastructure.Data
                 entity.Property(s => s.ResultsJson).IsRequired();
             });
 
+            modelBuilder.Entity<DealerListing>(entity =>
+            {
+                entity.ToTable("DealerListings");
+                entity.HasKey(l => l.Id);
+                entity.Property(l => l.Id).ValueGeneratedOnAdd();
+                entity.Property(l => l.DealerUserId).IsRequired();
+                entity.Property(l => l.IngredientName).IsRequired().HasMaxLength(100);
+                entity.Property(l => l.ContactInfo).IsRequired().HasMaxLength(300);
+
+                // Same reasoning as Ingredient.CostPerUnit above: SQLite has no decimal type.
+                entity.Property(l => l.Price).HasConversion<double>();
+
+                // The Market page's only search predicate.
+                entity.HasIndex(l => l.IngredientName);
+
+                // The link to AspNetUsers lives here, not on the entity — no navigation on
+                // either side, matching the discipline used for the nutrient relationships.
+                // Cascade so deleting a dealer's account takes their listings with it.
+                entity.HasOne<IdentityUser>()
+                      .WithMany()
+                      .HasForeignKey(l => l.DealerUserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
             SeedLibrary(modelBuilder);
+            SeedRoles(modelBuilder);
+        }
+
+        /// <summary>
+        /// The Dealer role, created by the migration so a fresh clone can register a dealer
+        /// immediately with no manual setup step.
+        ///
+        /// Every value here is a hard-coded literal on purpose. HasData must be deterministic:
+        /// a Guid.NewGuid() for Id or ConcurrencyStamp would make each `dotnet ef migrations add`
+        /// emit a spurious UpdateData for this row forever.
+        /// </summary>
+        private static void SeedRoles(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<IdentityRole>().HasData(new IdentityRole
+            {
+                Id = "9f3c1d2e-7a54-4b18-9c60-2f8e5b1a4d73",
+                Name = DealerRole,
+
+                // Not cosmetic. UserManager.AddToRoleAsync and User.IsInRole both resolve a role
+                // by its *normalized* (upper-case) name. Seed this lower-case or null and role
+                // assignment quietly finds nothing.
+                NormalizedName = "DEALER",
+                ConcurrencyStamp = "0c7d4a91-5e26-49b3-8f11-6ad38c705b42"
+            });
         }
 
         /// <summary>

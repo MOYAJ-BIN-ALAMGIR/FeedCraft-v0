@@ -1,0 +1,20 @@
+@{
+    ViewData["Title"] = "Access denied";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-3">Access denied</h2>
+
+    <div class="alert alert-warning">
+        You're signed in, but this page is for <strong>dealer</strong> accounts only.
+    </div>
+
+    <p class="text-muted">
+        Your account was created without the dealer option ticked. This build has no
+        self-service upgrade &mdash; register a new account with
+        &ldquo;I sell feed ingredients&rdquo; selected to get a listings page.
+    </p>
+
+    <a asp-controller="Market" asp-action="Index" class="btn btn-primary">Browse the market</a>
+    <a asp-controller="Feed" asp-action="Index" class="btn btn-link">Back to formulation</a>
+</div>

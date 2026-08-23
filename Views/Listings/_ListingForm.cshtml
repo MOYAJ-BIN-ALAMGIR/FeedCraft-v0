@@ -1,0 +1,55 @@
+@model FeedCraft.Web.Models.ListingEditViewModel
+
+@* Shared editor for Create and Edit. The enclosing <form> lives in the parent view. *@
+
+<div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+@if (Model.IsEdit)
+{
+    <input type="hidden" asp-for="Listing.Id" />
+}
+
+@* DealerUserId is deliberately absent from this form. The controller takes the owner from the
+   signed-in principal, so there is nothing here for a crafted post to override. *@
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Listing</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3 row">
+            <label asp-for="Listing.IngredientName" class="col-sm-3 col-form-label">Ingredient</label>
+            <div class="col-sm-6">
+                <input asp-for="Listing.IngredientName" class="form-control" placeholder="e.g. Corn" />
+                <span asp-validation-for="Listing.IngredientName" class="text-danger"></span>
+                <div class="form-text">
+                    Free text &mdash; it does not have to exist in the ingredient library.
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label asp-for="Listing.Price" class="col-sm-3 col-form-label">Price per kg</label>
+            <div class="col-sm-6">
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input asp-for="Listing.Price" class="form-control" step="0.01" />
+                    <span class="input-group-text">/ kg</span>
+                </div>
+                <span asp-validation-for="Listing.Price" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label asp-for="Listing.ContactInfo" class="col-sm-3 col-form-label">Contact info</label>
+            <div class="col-sm-6">
+                <input asp-for="Listing.ContactInfo" class="form-control"
+                       placeholder="Phone, email or address buyers can use" />
+                <span asp-validation-for="Listing.ContactInfo" class="text-danger"></span>
+                <div class="form-text">
+                    Shown publicly on the market page. Your login email is never published.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

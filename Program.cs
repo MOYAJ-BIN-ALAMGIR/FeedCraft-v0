@@ -1,5 +1,6 @@
 using FeedCraft.Domain.Services;
 using FeedCraft.Infrastructure.Data;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,30 @@ builder.Services.AddScoped<IFeedOptimizationService, FeedOptimizationService>();
 // Persistence lives in the Infrastructure layer (SQLite file alongside the app).
 builder.Services.AddDbContext<FeedCraftDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Identity shares the one FeedCraftDbContext, so there is a single database and a single
+// migration chain. AddIdentity (rather than AddDefaultIdentity) because the login/register
+// pages are our own MVC views — AddDefaultIdentity would drag in the Razor Pages UI package.
+// Password rules are left at Identity's defaults rather than weakened for demo convenience.
+builder.Services
+    .AddIdentity<IdentityUser, IdentityRole>(options =>
+    {
+        // No email sender exists in this app, so requiring a confirmed account would lock every
+        // newly registered dealer out of their own listings.
+        options.SignIn.RequireConfirmedAccount = false;
+        options.User.RequireUniqueEmail = true;
+    })
+    .AddEntityFrameworkStores<FeedCraftDbContext>()
+    .AddDefaultTokenProviders();
+
+// Point the cookie middleware at our own pages instead of the /Account/Login default it
+// assumes, and give a role failure somewhere meaningful to land.
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.AccessDeniedPath = "/Account/AccessDenied";
+});
 
 var app = builder.Build();
 
@@ -31,6 +56,10 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseRouting();
 
+// Order is load-bearing: authentication must establish who the caller is before
+// authorization decides what they may do. No global authorization filter is registered —
+// the whole app stays anonymous by default and only /Listings opts in.
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();

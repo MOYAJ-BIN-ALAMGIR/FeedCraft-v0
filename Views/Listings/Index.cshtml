@@ -1,0 +1,65 @@
+@model List<FeedCraft.Domain.Models.DealerListing>
+
+@{
+    ViewData["Title"] = "My Listings";
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">My Listings</h2>
+        <a asp-action="Create" class="btn btn-primary">Add Listing</a>
+    </div>
+
+    @if (TempData["ListingMessage"] is string listingMessage)
+    {
+        <div class="alert alert-info">@listingMessage</div>
+    }
+
+    <p class="text-muted">
+        Everything here is public on the <a asp-controller="Market" asp-action="Index">market page</a>,
+        where buyers search by ingredient and see the cheapest offers first.
+    </p>
+
+    @if (Model.Count == 0)
+    {
+        <div class="alert alert-warning">
+            You haven't listed anything yet. Add a listing and it appears in the market immediately.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Ingredient</th>
+                        <th>Price/kg</th>
+                        <th>Contact info</th>
+                        <th>Last updated</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var listing in Model)
+                    {
+                        <tr>
+                            <td>@listing.IngredientName</td>
+                            <td>$@listing.Price.ToString("F2")</td>
+                            <td>@listing.ContactInfo</td>
+                            <td>@listing.UpdatedAt.ToString("g")</td>
+                            <td class="text-nowrap">
+                                <a asp-action="Edit" asp-route-id="@listing.Id" class="btn btn-sm btn-outline-primary">Edit</a>
+                                <form asp-action="Delete" asp-route-id="@listing.Id" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('Remove @listing.IngredientName from the market?');">
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

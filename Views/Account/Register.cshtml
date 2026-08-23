@@ -1,0 +1,65 @@
+@model FeedCraft.Web.Models.RegisterViewModel
+
+@{
+    ViewData["Title"] = "Register";
+}
+
+<div class="container mt-4" style="max-width: 560px;">
+    <h2 class="mb-3">Create an account</h2>
+
+    <p class="text-muted">
+        You only need an account to <strong>sell</strong>. Browsing the market and building
+        formulations never requires signing in.
+    </p>
+
+    <form asp-action="Register" asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post">
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+        <div class="mb-3 row">
+            <label asp-for="Email" class="col-sm-3 col-form-label"></label>
+            <div class="col-sm-8">
+                <input asp-for="Email" class="form-control" autocomplete="username" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label asp-for="Password" class="col-sm-3 col-form-label"></label>
+            <div class="col-sm-8">
+                <input asp-for="Password" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+                <div class="form-text">
+                    At least 6 characters, including an upper-case letter, a lower-case letter,
+                    a digit and a symbol.
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label asp-for="ConfirmPassword" class="col-sm-3 col-form-label"></label>
+            <div class="col-sm-8">
+                <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-sm-8 offset-sm-3">
+                <div class="form-check mb-3">
+                    <input asp-for="IsDealer" class="form-check-input" />
+                    <label asp-for="IsDealer" class="form-check-label"></label>
+                    <div class="form-text">
+                        Dealers get a "My Listings" page for publishing ingredients and prices.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Register</button>
+                <a asp-action="Login" class="btn btn-link">I already have an account</a>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
