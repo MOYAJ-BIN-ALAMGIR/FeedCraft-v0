@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FeedCraft.Web</RootNamespace>
+    <AssemblyName>FeedCraft.Web</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Web depends on the domain layer only; OR-Tools flows in transitively via Domain. -->
+    <ProjectReference Include="FeedCraft.Domain\FeedCraft.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- FeedCraft.Domain and FeedCraft.Infrastructure live in subfolders of this web
+         project's root, so the Web SDK's default globbing would otherwise compile their
+         sources into this assembly (duplicate types / CS0436). Reference them as projects
+         only; never include their files here. -->
+    <Compile Remove="FeedCraft.Domain\**" />
+    <Compile Remove="FeedCraft.Infrastructure\**" />
+    <Content Remove="FeedCraft.Domain\**" />
+    <Content Remove="FeedCraft.Infrastructure\**" />
+    <EmbeddedResource Remove="FeedCraft.Domain\**" />
+    <EmbeddedResource Remove="FeedCraft.Infrastructure\**" />
+    <None Remove="FeedCraft.Domain\**" />
+    <None Remove="FeedCraft.Infrastructure\**" />
+  </ItemGroup>
+
+</Project>

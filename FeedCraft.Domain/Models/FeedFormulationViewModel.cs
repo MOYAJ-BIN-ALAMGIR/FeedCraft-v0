@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
-namespace FeedCraft_v0.Models
+namespace FeedCraft.Domain.Models
 {
     public class FeedFormulationViewModel
     {

@@ -1,12 +1,12 @@
 using Google.OrTools.LinearSolver;
-using FeedCraft_v0.Models;
+using FeedCraft.Domain.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FeedCraft_v0.Services
+namespace FeedCraft.Domain.Services
 {
-    public class FeedOptimizationService
+    public class FeedOptimizationService : IFeedOptimizationService
     {
         public FeedFormulationViewModel OptimizeFeed(FeedFormulationViewModel model)
         {

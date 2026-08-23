@@ -1,4 +1,4 @@
-namespace FeedCraft_v0.Models;
+namespace FeedCraft.Web.Models;
 
 public class ErrorViewModel
 {

@@ -1,4 +1,4 @@
-namespace FeedCraft_v0.Models
+namespace FeedCraft.Domain.Models
 {
     /// <summary>
     /// A min/max target for one nutrient. References a NutrientDefinition by Id

@@ -1,19 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
-using FeedCraft_v0.Models;
-using FeedCraft_v0.Services;
+using FeedCraft.Domain.Models;
+using FeedCraft.Domain.Services;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 
-namespace FeedCraft_v0.Controllers
+namespace FeedCraft.Web.Controllers
 {
     public class FeedController : Controller
     {
-        private readonly FeedOptimizationService _optimizer;
+        private readonly IFeedOptimizationService _optimizer;
 
-        public FeedController()
+        public FeedController(IFeedOptimizationService optimizer)
         {
-            _optimizer = new FeedOptimizationService();
+            _optimizer = optimizer;
         }
 
         [HttpGet]

@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using FeedCraft_v0.Models;
+using FeedCraft.Web.Models;
 
-namespace FeedCraft_v0.Controllers;
+namespace FeedCraft.Web.Controllers;
 
 public class HomeController : Controller
 {

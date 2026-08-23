@@ -4,7 +4,7 @@
     {
       "name": "feedcraft",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--no-build", "--project", "FeedCraft v0.csproj"],
+      "runtimeArgs": ["run", "--no-build", "--project", "FeedCraft.Web.csproj"],
       "port": 5296
     }
   ]

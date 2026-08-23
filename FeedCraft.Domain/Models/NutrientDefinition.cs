@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace FeedCraft_v0.Models
+namespace FeedCraft.Domain.Models
 {
     /// <summary>
     /// Defines a nutrient that the formulation can track and constrain.

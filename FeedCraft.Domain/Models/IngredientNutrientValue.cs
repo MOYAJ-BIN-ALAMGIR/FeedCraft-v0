@@ -1,4 +1,4 @@
-namespace FeedCraft_v0.Models
+namespace FeedCraft.Domain.Models
 {
     /// <summary>
     /// One nutrient reading for one ingredient — replaces the old fixed
