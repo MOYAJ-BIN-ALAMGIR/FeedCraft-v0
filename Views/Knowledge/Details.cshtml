@@ -1,0 +1,94 @@
+@model FeedCraft.Web.Models.KnowledgeDetailsViewModel
+
+@{
+    ViewData["Title"] = Model.Entry.Title;
+}
+
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Knowledge Base</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@Model.Entry.Title</li>
+        </ol>
+    </nav>
+
+    <h2 class="mb-2">@Model.Entry.Title</h2>
+
+    <p class="mb-4">
+        <span class="badge bg-light text-dark border">@Model.Entry.AnimalType</span>
+        <span class="text-muted">@Model.Entry.Stage</span>
+    </p>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            @* Each paragraph goes through Razor's @, which HTML-encodes. Html.Raw is
+               deliberately not used anywhere here: Content is a long free-text field, and
+               rendering it as markup would hand an XSS hole to whoever edits it next. *@
+            @foreach (var paragraph in Model.Paragraphs)
+            {
+                <p>@paragraph</p>
+            }
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Nutrient Targets</h5>
+        </div>
+        <div class="card-body">
+            @if (Model.Targets.Count == 0)
+            {
+                <p class="text-muted mb-0">This entry has no nutrient targets attached.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Nutrient</th>
+                                <th>Min</th>
+                                <th>Max</th>
+                                <th>Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var target in Model.Targets)
+                            {
+                                <tr>
+                                    <td>@target.NutrientName</td>
+                                    <td>@(target.MinValue?.ToString("0.##") ?? "—")</td>
+                                    <td>
+                                        @(target.MaxValue?.ToString("0.##") ?? "—")
+                                        @if (target.FootnoteNumber.HasValue)
+                                        {
+                                            <sup class="text-primary">@target.FootnoteNumber</sup>
+                                        }
+                                    </td>
+                                    <td class="text-muted">@target.Unit</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="text-muted small mb-0 mt-2">
+                    An em dash means the nutrient is not bounded in that direction.
+                </p>
+
+                @if (Model.Footnotes.Count > 0)
+                {
+                    <hr />
+                    @for (int i = 0; i < Model.Footnotes.Count; i++)
+                    {
+                        <p class="text-muted small mb-1">
+                            <sup class="text-primary">@(i + 1)</sup> @Model.Footnotes[i]
+                        </p>
+                    }
+                }
+            }
+        </div>
+    </div>
+
+    <a asp-action="Index" class="btn btn-outline-secondary">Back to Knowledge Base</a>
+</div>

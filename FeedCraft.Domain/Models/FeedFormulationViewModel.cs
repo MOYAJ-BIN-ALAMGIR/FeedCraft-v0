@@ -108,6 +108,17 @@ namespace FeedCraft.Domain.Models
                     Constraints.Add(new NutrientConstraint { NutrientDefinitionId = nutrient.Id });
                 }
             }
+
+            // Re-sorted for the same reason the ingredient readings above are: the nutrients
+            // table renders Constraints[k] beside NutrientDefinitions[k], so a row appended
+            // out of order by the loop above would show its min/max against the wrong
+            // nutrient's name. Callers that build a partial constraint list — loading a
+            // knowledge-base template, for one — depend on this.
+            var constraintOrder = NutrientDefinitions.Select((n, index) => new { n.Id, index })
+                                                     .ToDictionary(x => x.Id, x => x.index);
+            Constraints = Constraints
+                .OrderBy(c => constraintOrder.TryGetValue(c.NutrientDefinitionId, out var i) ? i : int.MaxValue)
+                .ToList();
         }
     }
 }

@@ -5,6 +5,8 @@
     ViewData["Title"] = "Feed Formulation";
     var savedFormulations = ViewData["SavedFormulations"] as List<SavedFormulationSummary>
         ?? new List<SavedFormulationSummary>();
+    var knowledgeTemplates = ViewData["KnowledgeTemplates"] as List<KnowledgeTemplateSummary>
+        ?? new List<KnowledgeTemplateSummary>();
 }
 
 <div class="container mt-4">
@@ -21,6 +23,11 @@
             Loaded saved formulation <strong>@loadedName</strong>. Editing the form below does
             not change the saved copy &mdash; save again to store a new snapshot.
         </div>
+    }
+
+    @if (ViewData["LoadedTemplate"] is string loadedTemplate)
+    {
+        <div class="alert alert-secondary">@loadedTemplate</div>
     }
 
     @if (Model.IsSolved)
@@ -199,6 +206,47 @@
                 <h5>Nutrients &amp; Constraints</h5>
             </div>
             <div class="card-body">
+                @* This select and its button sit *inside* #feedForm, unlike the Saved
+                   Formulations picker above which is a sibling GET form. That is deliberate:
+                   loading a template must preserve the ingredient rows, costs and batch size
+                   already on screen and change only the constraint fields, which means the
+                   live form state has to be posted. formaction/formmethod retarget this one
+                   button at LoadTemplate, reusing that state and its antiforgery token —
+                   the same trick the Save button uses further down.
+
+                   Consequence: templateId also rides along on Calculate and Save. Neither
+                   action binds it, so it is harmlessly ignored there. Do not "fix" this by
+                   nesting a second form — the browser silently drops inner forms. *@
+                @if (knowledgeTemplates.Count > 0)
+                {
+                    <div class="border rounded bg-light p-3 mb-3">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-sm-6">
+                                <select name="templateId" class="form-select" aria-label="Knowledge base template">
+                                    @foreach (var template in knowledgeTemplates)
+                                    {
+                                        <option value="@template.Id">@template.Title</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-sm-6">
+                                <button type="submit" class="btn btn-outline-primary"
+                                        formaction="@Url.Action("LoadTemplate")" formmethod="post">
+                                    Load Template
+                                </button>
+                                <a asp-controller="Knowledge" asp-action="Index" class="btn btn-link">
+                                    Browse knowledge base
+                                </a>
+                            </div>
+                        </div>
+                        <p class="text-muted small mb-0 mt-2">
+                            Replaces the Min and Max values below with that entry's published
+                            targets. Ingredients, costs and batch size are left alone, and any
+                            nutrient the template does not mention is left unconstrained.
+                        </p>
+                    </div>
+                }
+
                 <p class="text-muted small mb-2">
                     Leave Min and Max blank to track a nutrient without constraining it.
                     Min/Max are read in the same unit as the ingredient values, so both

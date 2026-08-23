@@ -25,7 +25,7 @@ namespace FeedCraft.Web.Controllers
         [HttpGet]
         public IActionResult Index()
         {
-            LoadSavedFormulations();
+            LoadFormPickers();
             return View(BuildModelFromLibrary());
         }
 
@@ -41,7 +41,7 @@ namespace FeedCraft.Web.Controllers
             {
                 // Re-render the form (with validation messages) instead of running the
                 // solver on invalid input — this is what prevents the zero-batch-size NaN.
-                LoadSavedFormulations();
+                LoadFormPickers();
                 return View("Index", model);
             }
 
@@ -62,7 +62,7 @@ namespace FeedCraft.Web.Controllers
                 var model = JsonSerializer.Deserialize<FeedFormulationViewModel>(json);
                 if (model != null)
                 {
-                    LoadSavedFormulations();
+                    LoadFormPickers();
                     return View("Index", model);
                 }
             }
@@ -91,7 +91,7 @@ namespace FeedCraft.Web.Controllers
 
             if (!ValidateFormulation(model))
             {
-                LoadSavedFormulations();
+                LoadFormPickers();
                 return View("Index", model);
             }
 
@@ -164,8 +164,104 @@ namespace FeedCraft.Web.Controllers
             // The snapshot already holds consistent Ids; this only re-sorts and gap-fills.
             model.Normalize();
 
-            LoadSavedFormulations();
+            LoadFormPickers();
             ViewData["LoadedFormulation"] = $"{saved.Name} (saved {saved.CreatedAt:g})";
+            return View("Index", model);
+        }
+
+        /// <summary>
+        /// Copies a knowledge-base entry's nutrient targets into the constraint fields of the
+        /// form the user is currently editing.
+        ///
+        /// A POST rather than a GET, and it binds the whole view model, because it has to
+        /// preserve everything else on the form — edited ingredient costs, added rows, batch
+        /// size. (Contrast Load above, which is a GET precisely because it replaces the form
+        /// wholesale from a snapshot.)
+        ///
+        /// The copy is strictly one-way: the KnowledgeEntry is read AsNoTracking() and nothing
+        /// here writes to the database, so editing the form afterwards cannot alter the
+        /// reference data.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult LoadTemplate(FeedFormulationViewModel model, int templateId)
+        {
+            // Repair Ids/slots for anything added client-side before reading the nutrient
+            // list, same as Calculate does.
+            model.Normalize();
+
+            var entry = _db.KnowledgeEntries
+                .AsNoTracking()
+                .Include(e => e.Targets)
+                .FirstOrDefault(e => e.Id == templateId);
+
+            if (entry == null)
+            {
+                TempData["LibraryMessage"] = "That knowledge base template no longer exists.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var targets = entry.Targets.ToDictionary(t => t.NutrientDefinitionId);
+
+            // Rebuilt by walking NutrientDefinitions, so the list comes out in nutrient order
+            // and stays index-aligned with the table the view renders.
+            //
+            // A nutrient the template does not mention is left *unbounded* rather than keeping
+            // whatever was previously typed. Otherwise a leftover bound could make the mix
+            // infeasible for a reason that is nowhere on screen — the user would see "no
+            // solution" for a constraint the template never asked for.
+            model.Constraints = model.NutrientDefinitions
+                .Select(nutrient => new NutrientConstraint
+                {
+                    NutrientDefinitionId = nutrient.Id,
+                    MinValue = targets.TryGetValue(nutrient.Id, out var t) ? t.MinValue : null,
+                    MaxValue = targets.TryGetValue(nutrient.Id, out var u) ? u.MaxValue : null
+                })
+                .ToList();
+
+            // A template can also target a nutrient this form does not have. Naming those is
+            // better than silently adding nutrient rows the user did not ask for.
+            var formNutrientIds = model.NutrientDefinitions.Select(n => n.Id).ToHashSet();
+            var unmatched = entry.Targets
+                .Where(t => !formNutrientIds.Contains(t.NutrientDefinitionId))
+                .Select(t => t.NutrientDefinitionId)
+                .ToList();
+
+            var appliedCount = entry.Targets.Count - unmatched.Count;
+            var message = $"Loaded targets from \"{entry.Title}\" — {appliedCount} nutrient" +
+                          $"{(appliedCount == 1 ? "" : "s")} set.";
+
+            if (unmatched.Count > 0)
+            {
+                var names = _db.NutrientDefinitions
+                    .AsNoTracking()
+                    .Where(n => unmatched.Contains(n.Id))
+                    .Select(n => n.Name)
+                    .ToList();
+
+                message += $" This template also targets {string.Join(", ", names)}, which " +
+                           "this formulation does not track — add the nutrient below and load " +
+                           "the template again to apply it.";
+            }
+
+            // The nutrient inputs are rendered by tag helpers, and those read ModelState in
+            // preference to the model itself. Without this the values just posted would win and
+            // the loaded targets would never appear on screen — the banner would claim a
+            // template had been applied while the fields still showed the old numbers.
+            //
+            // Only the Constraints entries are dropped. Everything else must keep re-rendering
+            // exactly what the user typed, including text that failed to bind: clearing all of
+            // ModelState would quietly rewrite a cost of "0.2o" as 0 while their attention was
+            // on the nutrient table.
+            foreach (var key in ModelState.Keys
+                         .Where(k => k.StartsWith("Constraints", StringComparison.Ordinal))
+                         .ToList())
+            {
+                ModelState.Remove(key);
+            }
+
+            ViewData["LoadedTemplate"] = message;
+            LoadFormPickers();
             return View("Index", model);
         }
 
@@ -222,8 +318,15 @@ namespace FeedCraft.Web.Controllers
             return model;
         }
 
-        /// <summary>Fills the "Load formulation" dropdown, newest first.</summary>
-        private void LoadSavedFormulations()
+        /// <summary>
+        /// Fills both dropdowns above the form: saved formulations (newest first) and
+        /// knowledge-base templates.
+        ///
+        /// They are loaded together in one helper on purpose — every path that re-renders
+        /// Index calls this, so a new picker cannot be forgotten on one of them and silently
+        /// vanish from, say, the validation-failure re-render.
+        /// </summary>
+        private void LoadFormPickers()
         {
             ViewData["SavedFormulations"] = _db.SavedFormulations
                 .AsNoTracking()
@@ -234,6 +337,17 @@ namespace FeedCraft.Web.Controllers
                     Id = s.Id,
                     Name = s.Name,
                     CreatedAt = s.CreatedAt
+                })
+                .ToList();
+
+            ViewData["KnowledgeTemplates"] = _db.KnowledgeEntries
+                .AsNoTracking()
+                .OrderBy(e => e.AnimalType)
+                .ThenBy(e => e.Id)
+                .Select(e => new KnowledgeTemplateSummary
+                {
+                    Id = e.Id,
+                    Title = e.Title
                 })
                 .ToList();
         }
