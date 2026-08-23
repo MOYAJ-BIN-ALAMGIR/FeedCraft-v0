@@ -1,0 +1,75 @@
+@model FeedCraft.Domain.Models.FeedFormulationViewModel
+
+@*
+    The solved result for one formulation: total cost, the mix, and the nutrient analysis it
+    achieves. Moved out of Views/Feed/Index.cshtml unchanged so /Experiment can show the same
+    block once per panel — including the indentation, so the rendered HTML stays comparable.
+
+    Reads nothing but the model, so it is safe to render as many times per page as there are
+    formulations.
+*@
+    @if (Model.IsSolved)
+    {
+        <div class="alert alert-success">
+            <h4>Optimization Result</h4>
+            <p><strong>Total Cost:</strong> $@Model.TotalCost.ToString("F2")</p>
+
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Ingredient</th>
+                        <th>Quantity (kg)</th>
+                        <th>% of Batch</th>
+                        <th>Limit (Min&ndash;Max %)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ingredient in Model.Ingredients)
+                    {
+                        var qty = Model.OptimizedQuantities.TryGetValue(ingredient.Id, out var q) ? q : 0.0;
+                        var minLbl = (ingredient.MinInclusionPct ?? 0).ToString("0.##");
+                        var maxLbl = (ingredient.MaxInclusionPct ?? 100).ToString("0.##");
+                        <tr>
+                            <td>@ingredient.Name</td>
+                            <td>@qty.ToString("F2")</td>
+                            <td>@((qty / Model.BatchSize * 100).ToString("F2"))%</td>
+                            <td>@minLbl &ndash; @maxLbl</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <h5 class="mt-4">Nutrient Analysis</h5>
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th>Nutrient</th>
+                        <th>Value</th>
+                        <th>Target (Min - Max)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var nutrient in Model.NutrientDefinitions)
+                    {
+                        var value = Model.CalculatedNutrients.TryGetValue(nutrient.Id, out var v) ? v : 0.0;
+                        var constraint = Model.FindConstraint(nutrient.Id);
+                        var min = constraint?.MinValue?.ToString("F2") ?? "-";
+                        var max = constraint?.MaxValue?.ToString("F2") ?? "-";
+
+                        <tr>
+                            <td>@nutrient.Name <span class="text-muted">(@nutrient.Unit)</span></td>
+                            <td>@value.ToString("F2")</td>
+                            <td>@min - @max</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">
+            <h4>Error</h4>
+            <p>@Model.ErrorMessage</p>
+        </div>
+    }

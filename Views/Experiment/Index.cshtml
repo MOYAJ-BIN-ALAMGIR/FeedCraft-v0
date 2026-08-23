@@ -1,0 +1,197 @@
+@model FeedCraft.Web.Models.ExperimentViewModel
+
+@{
+    ViewData["Title"] = "Experiment";
+}
+
+<div class="container-fluid mt-4">
+    <h2 class="mb-1">Experiment</h2>
+    <p class="text-muted">
+        Two formulations, side by side. Change one thing &mdash; a constraint, a price, an
+        inclusion limit &mdash; solve both, and read what it costs.
+    </p>
+
+    @if (Model.Diff is FormulationDiff d)
+    {
+        <div class="card border-primary mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">A vs B</h5>
+            </div>
+            <div class="card-body">
+                @if (!d.CanCompare)
+                {
+                    <p class="mb-0">@d.Message</p>
+                }
+                else
+                {
+                    // Per kg is the headline. Batch sizes are edited per panel, so two totals can
+                    // describe different amounts of feed — comparing them directly would be
+                    // meaningless without saying so.
+                    var absPerKg = Math.Abs(d.CostPerKgDelta);
+                    var absTotal = Math.Abs(d.CostDelta);
+                    var absPct = Math.Abs(d.CostDeltaPct);
+                    var cheaper = d.CostPerKgDelta < 0 ? "B" : d.CostPerKgDelta > 0 ? "A" : null;
+
+                    <p class="fs-5 mb-2">
+                        @if (cheaper == null)
+                        {
+                            <text>Both panels cost the same per kg.</text>
+                        }
+                        else
+                        {
+                            <text>
+                                Panel <strong>@cheaper</strong> is cheaper by
+                                <strong>$@absPerKg.ToString("F4") per kg</strong>
+                                (@absPct.ToString("F1")%).
+                            </text>
+                        }
+
+                        @if (d.BiggestDecrease != null && d.BiggestIncrease != null)
+                        {
+                            // Every movement is B - A, so the direction has to be said out loud.
+                            // Without it, a cheaper A reads as though moving *out* of an ingredient
+                            // were the saving, which is backwards.
+                            <text>
+                                Going from A to B, the biggest move is
+                                @Math.Abs(d.BiggestDecrease.DeltaPct).ToString("F2") pp out of
+                                <strong>@d.BiggestDecrease.Name</strong> and
+                                @d.BiggestIncrease.DeltaPct.ToString("F2") pp into
+                                <strong>@d.BiggestIncrease.Name</strong>.
+                            </text>
+                        }
+                    </p>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="border rounded p-2 h-100">
+                                <div class="text-muted small">Panel A</div>
+                                <div class="fs-5">$@d.CostA.ToString("F2")</div>
+                                <div class="text-muted small">
+                                    @d.BatchSizeA.ToString("0.##") kg &middot;
+                                    $@d.CostPerKgA.ToString("F4")/kg
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-2 h-100">
+                                <div class="text-muted small">Panel B</div>
+                                <div class="fs-5">$@d.CostB.ToString("F2")</div>
+                                <div class="text-muted small">
+                                    @d.BatchSizeB.ToString("0.##") kg &middot;
+                                    $@d.CostPerKgB.ToString("F4")/kg
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-2 h-100">
+                                <div class="text-muted small">Difference (B &minus; A)</div>
+                                <div class="fs-5 @(d.CostDelta < 0 ? "text-success" : d.CostDelta > 0 ? "text-danger" : "")">
+                                    @(d.CostDelta < 0 ? "-" : d.CostDelta > 0 ? "+" : "")$@absTotal.ToString("F2")
+                                </div>
+                                <div class="text-muted small">
+                                    @(d.CostPerKgDelta < 0 ? "-" : d.CostPerKgDelta > 0 ? "+" : "")$@absPerKg.ToString("F4")/kg
+                                    &middot; @d.ChangedCount ingredient@(d.ChangedCount == 1 ? "" : "s") moved
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (d.BatchSizesDiffer)
+                    {
+                        <div class="alert alert-warning py-2 small">
+                            The panels use different batch sizes
+                            (@d.BatchSizeA.ToString("0.##") kg vs @d.BatchSizeB.ToString("0.##") kg),
+                            so the totals above describe different amounts of feed. Compare the
+                            per-kg figures, not the totals.
+                        </div>
+                    }
+
+                    <h6 class="mt-3">What moved</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Ingredient</th>
+                                    <th class="text-end">Panel A</th>
+                                    <th class="text-end">Panel B</th>
+                                    <th class="text-end">Change (pp)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in d.Movements)
+                                {
+                                    <tr class="@(m.Changed ? "" : "text-muted")">
+                                        <td class="@(m.Changed ? "fw-semibold" : "")">
+                                            @m.Name
+                                            @if (m.OnlyInA)
+                                            {
+                                                <span class="badge bg-secondary">only in A</span>
+                                            }
+                                            else if (m.OnlyInB)
+                                            {
+                                                <span class="badge bg-secondary">only in B</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @(m.PercentA.HasValue ? m.PercentA.Value.ToString("F2") + "%" : "—")
+                                        </td>
+                                        <td class="text-end">
+                                            @(m.PercentB.HasValue ? m.PercentB.Value.ToString("F2") + "%" : "—")
+                                        </td>
+                                        <td class="text-end @(m.Changed ? (m.DeltaPct > 0 ? "text-success fw-semibold" : "text-danger fw-semibold") : "")">
+                                            @if (m.Changed)
+                                            {
+                                                @(m.DeltaPct > 0 ? "+" : "")@m.DeltaPct.ToString("F2")
+                                            }
+                                            else
+                                            {
+                                                <text>&mdash;</text>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small mb-0 mt-2">
+                        Percentages are each panel's share of its own batch, so they stay
+                        comparable even when the batch sizes differ. "pp" is percentage points.
+                    </p>
+                }
+            </div>
+        </div>
+    }
+
+    @* One form for both panels. Solving is a single submit, so the summary above can only ever
+       describe two results that were produced together — it can never show a stale A against a
+       fresh B. One form also means one antiforgery token, shared by the load buttons inside the
+       panels. *@
+    <form asp-action="Solve" method="post" id="experimentForm">
+
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+        <div class="mb-3">
+            <button type="submit" class="btn btn-success btn-lg">Solve Both</button>
+        </div>
+
+        <div class="row g-4">
+            @* for= (not model=) is what gives each panel its own field prefix. With model= both
+               panels would post into the same names and B would silently overwrite A. *@
+            <div class="col-lg-6">
+                <partial name="_Panel" for="PanelA" />
+            </div>
+            <div class="col-lg-6">
+                <partial name="_Panel" for="PanelB" />
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-success btn-lg">Solve Both</button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/formulation-panel.js" asp-append-version="true"></script>
+}

@@ -1,5 +1,4 @@
 @model FeedCraft.Domain.Models.FeedFormulationViewModel
-@using FeedCraft.Web.Models
 
 @{
     ViewData["Title"] = "Feed Formulation";
@@ -30,71 +29,9 @@
         <div class="alert alert-secondary">@loadedTemplate</div>
     }
 
-    @if (Model.IsSolved)
-    {
-        <div class="alert alert-success">
-            <h4>Optimization Result</h4>
-            <p><strong>Total Cost:</strong> $@Model.TotalCost.ToString("F2")</p>
-
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>Ingredient</th>
-                        <th>Quantity (kg)</th>
-                        <th>% of Batch</th>
-                        <th>Limit (Min&ndash;Max %)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var ingredient in Model.Ingredients)
-                    {
-                        var qty = Model.OptimizedQuantities.TryGetValue(ingredient.Id, out var q) ? q : 0.0;
-                        var minLbl = (ingredient.MinInclusionPct ?? 0).ToString("0.##");
-                        var maxLbl = (ingredient.MaxInclusionPct ?? 100).ToString("0.##");
-                        <tr>
-                            <td>@ingredient.Name</td>
-                            <td>@qty.ToString("F2")</td>
-                            <td>@((qty / Model.BatchSize * 100).ToString("F2"))%</td>
-                            <td>@minLbl &ndash; @maxLbl</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-
-            <h5 class="mt-4">Nutrient Analysis</h5>
-            <table class="table table-bordered table-sm">
-                <thead>
-                    <tr>
-                        <th>Nutrient</th>
-                        <th>Value</th>
-                        <th>Target (Min - Max)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var nutrient in Model.NutrientDefinitions)
-                    {
-                        var value = Model.CalculatedNutrients.TryGetValue(nutrient.Id, out var v) ? v : 0.0;
-                        var constraint = Model.FindConstraint(nutrient.Id);
-                        var min = constraint?.MinValue?.ToString("F2") ?? "-";
-                        var max = constraint?.MaxValue?.ToString("F2") ?? "-";
-
-                        <tr>
-                            <td>@nutrient.Name <span class="text-muted">(@nutrient.Unit)</span></td>
-                            <td>@value.ToString("F2")</td>
-                            <td>@min - @max</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-    else if (!string.IsNullOrEmpty(Model.ErrorMessage))
-    {
-        <div class="alert alert-danger">
-            <h4>Error</h4>
-            <p>@Model.ErrorMessage</p>
-        </div>
-    }
+    @* Shared with /Experiment, which renders the same block once per panel. Rendered with
+       model="Model" so the field prefix stays empty and every posted name is unchanged. *@
+    <partial name="_FormulationResults" model="Model" />
 
     @* A sibling of #feedForm, never nested inside it — nested forms are invalid HTML and
        the inner one is silently dropped by the browser. *@
@@ -133,169 +70,59 @@
 
         <div asp-validation-summary="All" class="text-danger mb-3"></div>
 
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>Batch Settings</h5>
-            </div>
-            <div class="card-body">
-                <div class="form-group row">
-                    <label class="col-sm-2 col-form-label">Batch Size (kg):</label>
-                    <div class="col-sm-4">
-                        <input asp-for="BatchSize" class="form-control" />
-                    </div>
-                </div>
-            </div>
-        </div>
+        @* This select and its button sit *inside* #feedForm, unlike the Saved
+           Formulations picker above which is a sibling GET form. That is deliberate:
+           loading a template must preserve the ingredient rows, costs and batch size
+           already on screen and change only the constraint fields, which means the
+           live form state has to be posted. formaction/formmethod retarget this one
+           button at LoadTemplate, reusing that state and its antiforgery token —
+           the same trick the Save button uses further down.
 
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5>Ingredients</h5>
-                <div>
-                    <button type="button" class="btn btn-primary btn-sm" onclick="addIngredientRow()">Add Ingredient</button>
-                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addNutrient()">Add Nutrient</button>
+           Consequence: templateId also rides along on Calculate and Save. Neither
+           action binds it, so it is harmlessly ignored there. Do not "fix" this by
+           nesting a second form — the browser silently drops inner forms.
+
+           It used to sit at the top of the Nutrients & Constraints card; it moved out when
+           that card became a shared partial, since the picker is specific to this page. Only
+           its position in the posted body changed, and nothing binds by position. *@
+        @if (knowledgeTemplates.Count > 0)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Load From Knowledge Base</h5>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm" id="ingredientsTable">
-                        <thead>
-                            <tr id="ingredientsHeaderRow">
-                                <th>Name</th>
-                                <th>Cost/Unit</th>
-                                @foreach (var nutrient in Model.NutrientDefinitions)
+                <div class="card-body">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-sm-6">
+                            <select name="templateId" class="form-select" aria-label="Knowledge base template">
+                                @foreach (var template in knowledgeTemplates)
                                 {
-                                    <th class="nutrient-col">@nutrient.Name (@nutrient.Unit)</th>
+                                    <option value="@template.Id">@template.Title</option>
                                 }
-                                <th id="thMinPct">Min %</th>
-                                <th id="thMaxPct">Max %</th>
-                                <th id="thActions"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (int i = 0; i < Model.Ingredients.Count; i++)
-                            {
-                                <tr>
-                                    <td>
-                                        <input type="hidden" asp-for="Ingredients[i].Id" />
-                                        <input asp-for="Ingredients[i].Name" class="form-control" />
-                                    </td>
-                                    <td><input asp-for="Ingredients[i].CostPerUnit" class="form-control" step="0.01" /></td>
-
-                                    @* One column per nutrient definition — nothing here is hardcoded. *@
-                                    @for (int k = 0; k < Model.Ingredients[i].NutrientValues.Count; k++)
-                                    {
-                                        <td class="nutrient-cell">
-                                            <input type="hidden" asp-for="Ingredients[i].NutrientValues[k].NutrientDefinitionId" />
-                                            <input asp-for="Ingredients[i].NutrientValues[k].Value" class="form-control" step="0.01" />
-                                        </td>
-                                    }
-
-                                    <td class="incl-min-cell"><input asp-for="Ingredients[i].MinInclusionPct" class="form-control" step="0.1" placeholder="0" /></td>
-                                    <td class="incl-max-cell"><input asp-for="Ingredients[i].MaxInclusionPct" class="form-control" step="0.1" placeholder="100" /></td>
-                                    <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>Nutrients &amp; Constraints</h5>
-            </div>
-            <div class="card-body">
-                @* This select and its button sit *inside* #feedForm, unlike the Saved
-                   Formulations picker above which is a sibling GET form. That is deliberate:
-                   loading a template must preserve the ingredient rows, costs and batch size
-                   already on screen and change only the constraint fields, which means the
-                   live form state has to be posted. formaction/formmethod retarget this one
-                   button at LoadTemplate, reusing that state and its antiforgery token —
-                   the same trick the Save button uses further down.
-
-                   Consequence: templateId also rides along on Calculate and Save. Neither
-                   action binds it, so it is harmlessly ignored there. Do not "fix" this by
-                   nesting a second form — the browser silently drops inner forms. *@
-                @if (knowledgeTemplates.Count > 0)
-                {
-                    <div class="border rounded bg-light p-3 mb-3">
-                        <div class="row g-2 align-items-center">
-                            <div class="col-sm-6">
-                                <select name="templateId" class="form-select" aria-label="Knowledge base template">
-                                    @foreach (var template in knowledgeTemplates)
-                                    {
-                                        <option value="@template.Id">@template.Title</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-sm-6">
-                                <button type="submit" class="btn btn-outline-primary"
-                                        formaction="@Url.Action("LoadTemplate")" formmethod="post">
-                                    Load Template
-                                </button>
-                                <a asp-controller="Knowledge" asp-action="Index" class="btn btn-link">
-                                    Browse knowledge base
-                                </a>
-                            </div>
+                            </select>
                         </div>
-                        <p class="text-muted small mb-0 mt-2">
-                            Replaces the Min and Max values below with that entry's published
-                            targets. Ingredients, costs and batch size are left alone, and any
-                            nutrient the template does not mention is left unconstrained.
-                        </p>
+                        <div class="col-sm-6">
+                            <button type="submit" class="btn btn-outline-primary"
+                                    formaction="@Url.Action("LoadTemplate")" formmethod="post">
+                                Load Template
+                            </button>
+                            <a asp-controller="Knowledge" asp-action="Index" class="btn btn-link">
+                                Browse knowledge base
+                            </a>
+                        </div>
                     </div>
-                }
-
-                <p class="text-muted small mb-2">
-                    Leave Min and Max blank to track a nutrient without constraining it.
-                    Min/Max are read in the same unit as the ingredient values, so both
-                    <em>%</em> and absolute units such as <em>kcal/kg</em> work as-is.
-                </p>
-                <div class="table-responsive">
-                    <table class="table table-sm" id="nutrientsTable">
-                        <thead>
-                            <tr>
-                                <th>Nutrient</th>
-                                <th>Unit</th>
-                                <th class="text-center">Is %</th>
-                                <th>Min Value</th>
-                                <th>Max Value</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (int k = 0; k < Model.NutrientDefinitions.Count; k++)
-                            {
-                                <tr>
-                                    <td>
-                                        <input type="hidden" asp-for="NutrientDefinitions[k].Id" />
-                                        <input asp-for="NutrientDefinitions[k].Name" class="form-control" oninput="syncNutrientHeaders()" />
-                                    </td>
-                                    <td><input asp-for="NutrientDefinitions[k].Unit" class="form-control" oninput="syncNutrientHeaders()" /></td>
-                                    <td class="text-center align-middle">
-                                        @* Rendered explicitly rather than with asp-for: the tag helper emits the
-                                           hidden "false" companion at the end of the <form>, where the JS
-                                           re-indexer can't reach it — a removed row would leave a phantom
-                                           NutrientDefinitions[n] behind and bind an empty nutrient. *@
-                                        <input type="checkbox" class="form-check-input"
-                                               name="NutrientDefinitions[@k].IsPercentage" value="true"
-                                               checked="@Model.NutrientDefinitions[k].IsPercentage" />
-                                        <input type="hidden" name="NutrientDefinitions[@k].IsPercentage" value="false" />
-                                    </td>
-                                    <td>
-                                        <input type="hidden" asp-for="Constraints[k].NutrientDefinitionId" />
-                                        <input asp-for="Constraints[k].MinValue" class="form-control" step="0.01" />
-                                    </td>
-                                    <td><input asp-for="Constraints[k].MaxValue" class="form-control" step="0.01" /></td>
-                                    <td><button type="button" class="btn btn-danger btn-sm" onclick="removeNutrient(this)">X</button></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <p class="text-muted small mb-0 mt-2">
+                        Replaces the Min and Max values below with that entry's published
+                        targets. Ingredients, costs and batch size are left alone, and any
+                        nutrient the template does not mention is left unconstrained.
+                    </p>
                 </div>
             </div>
-        </div>
+        }
+
+        @* Batch size, the ingredient grid and the nutrient constraints. Same partial the two
+           /Experiment panels use; model="Model" keeps the field prefix empty here. *@
+        <partial name="_FormulationInputs" model="Model" />
 
         <div class="card mb-4">
             <div class="card-header">
@@ -329,164 +156,7 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    <script>
-        function hidden(name, value) {
-            return '<input type="hidden" name="' + name + '" value="' + value + '" />';
-        }
-
-        function ingredientBody() {
-            return document.getElementById("ingredientsTable").getElementsByTagName('tbody')[0];
-        }
-
-        function nutrientBody() {
-            return document.getElementById("nutrientsTable").getElementsByTagName('tbody')[0];
-        }
-
-        // Ids must be unique across the posted form; new rows take max+1.
-        function nextId(selector) {
-            var max = 0;
-            document.querySelectorAll(selector).forEach(function (el) {
-                var n = parseInt(el.value, 10);
-                if (!isNaN(n) && n > max) max = n;
-            });
-            return max + 1;
-        }
-
-        function addIngredientRow() {
-            var body = ingredientBody();
-            var index = body.rows.length;
-            var row = body.insertRow(index);
-            var newId = nextId('input[name$=".Id"][name^="Ingredients["]');
-
-            var html =
-                '<td>' + hidden('Ingredients[' + index + '].Id', newId) +
-                    '<input name="Ingredients[' + index + '].Name" class="form-control" value="New Ingredient" /></td>' +
-                '<td><input name="Ingredients[' + index + '].CostPerUnit" class="form-control" type="number" step="0.01" value="0" /></td>';
-
-            // A value cell per existing nutrient, in the same order as the headers.
-            var nutrientRows = nutrientBody().rows;
-            for (var k = 0; k < nutrientRows.length; k++) {
-                var nutrientId = nutrientRows[k].querySelector('input[name^="NutrientDefinitions["][name$=".Id"]').value;
-                html += '<td class="nutrient-cell">' +
-                    hidden('Ingredients[' + index + '].NutrientValues[' + k + '].NutrientDefinitionId', nutrientId) +
-                    '<input name="Ingredients[' + index + '].NutrientValues[' + k + '].Value" class="form-control" type="number" step="0.01" value="0" /></td>';
-            }
-
-            html +=
-                '<td class="incl-min-cell"><input name="Ingredients[' + index + '].MinInclusionPct" class="form-control" type="number" step="0.1" placeholder="0" /></td>' +
-                '<td class="incl-max-cell"><input name="Ingredients[' + index + '].MaxInclusionPct" class="form-control" type="number" step="0.1" placeholder="100" value="100" /></td>' +
-                '<td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>';
-
-            row.innerHTML = html;
-        }
-
-        // Adds a nutrient: one row in the constraints table, and one column
-        // across every ingredient row.
-        function addNutrient() {
-            var body = nutrientBody();
-            var k = body.rows.length;
-            var newId = nextId('input[name^="NutrientDefinitions["][name$=".Id"]');
-            var row = body.insertRow(k);
-
-            row.innerHTML =
-                '<td>' + hidden('NutrientDefinitions[' + k + '].Id', newId) +
-                    '<input name="NutrientDefinitions[' + k + '].Name" class="form-control" value="New Nutrient" oninput="syncNutrientHeaders()" /></td>' +
-                '<td><input name="NutrientDefinitions[' + k + '].Unit" class="form-control" value="%" oninput="syncNutrientHeaders()" /></td>' +
-                '<td class="text-center align-middle">' +
-                    '<input type="checkbox" name="NutrientDefinitions[' + k + '].IsPercentage" value="true" checked class="form-check-input" />' +
-                    hidden('NutrientDefinitions[' + k + '].IsPercentage', 'false') + '</td>' +
-                '<td>' + hidden('Constraints[' + k + '].NutrientDefinitionId', newId) +
-                    '<input name="Constraints[' + k + '].MinValue" class="form-control" type="number" step="0.01" /></td>' +
-                '<td><input name="Constraints[' + k + '].MaxValue" class="form-control" type="number" step="0.01" /></td>' +
-                '<td><button type="button" class="btn btn-danger btn-sm" onclick="removeNutrient(this)">X</button></td>';
-
-            // New header column, inserted before the inclusion-limit headers.
-            var th = document.createElement('th');
-            th.className = 'nutrient-col';
-            var thMin = document.getElementById('thMinPct');
-            thMin.parentNode.insertBefore(th, thMin);
-
-            // New value cell on every ingredient row.
-            var rows = ingredientBody().rows;
-            for (var i = 0; i < rows.length; i++) {
-                var cellIndex = rows[i].querySelectorAll('td.nutrient-cell').length;
-                var td = document.createElement('td');
-                td.className = 'nutrient-cell';
-                td.innerHTML =
-                    hidden('Ingredients[' + i + '].NutrientValues[' + cellIndex + '].NutrientDefinitionId', newId) +
-                    '<input name="Ingredients[' + i + '].NutrientValues[' + cellIndex + '].Value" class="form-control" type="number" step="0.01" value="0" />';
-                rows[i].insertBefore(td, rows[i].querySelector('td.incl-min-cell'));
-            }
-
-            syncNutrientHeaders();
-        }
-
-        function removeNutrient(btn) {
-            var row = btn.closest('tr');
-            var k = row.rowIndex - 1; // rowIndex counts the header row
-            row.parentNode.removeChild(row);
-
-            // Drop the matching header and the matching cell on every ingredient row.
-            var headers = document.querySelectorAll('#ingredientsHeaderRow th.nutrient-col');
-            if (headers[k]) headers[k].parentNode.removeChild(headers[k]);
-
-            var rows = ingredientBody().rows;
-            for (var i = 0; i < rows.length; i++) {
-                var cells = rows[i].querySelectorAll('td.nutrient-cell');
-                if (cells[k]) rows[i].removeChild(cells[k]);
-            }
-
-            reIndexNutrients();
-            reIndexRows();
-            syncNutrientHeaders();
-        }
-
-        function removeRow(btn) {
-            var row = btn.closest('tr');
-            row.parentNode.removeChild(row);
-            // Re-index so model binding still sees a contiguous list after a delete.
-            reIndexRows();
-        }
-
-        // Rewrites Ingredients[i] on every input, including the nested
-        // NutrientValues[k] indices, which are keyed off cell position.
-        function reIndexRows() {
-            var rows = ingredientBody().rows;
-            for (var i = 0; i < rows.length; i++) {
-                rows[i].querySelectorAll('input').forEach(function (input) {
-                    if (input.name.indexOf('Ingredients[') === 0) {
-                        input.name = input.name.replace(/^Ingredients\[\d+\]/, 'Ingredients[' + i + ']');
-                    }
-                });
-
-                rows[i].querySelectorAll('td.nutrient-cell').forEach(function (cell, k) {
-                    cell.querySelectorAll('input').forEach(function (input) {
-                        input.name = input.name.replace(/NutrientValues\[\d+\]/, 'NutrientValues[' + k + ']');
-                    });
-                });
-            }
-        }
-
-        function reIndexNutrients() {
-            var rows = nutrientBody().rows;
-            for (var k = 0; k < rows.length; k++) {
-                rows[k].querySelectorAll('input').forEach(function (input) {
-                    input.name = input.name
-                        .replace(/^NutrientDefinitions\[\d+\]/, 'NutrientDefinitions[' + k + ']')
-                        .replace(/^Constraints\[\d+\]/, 'Constraints[' + k + ']');
-                });
-            }
-        }
-
-        // Keeps the ingredient-table column headers in step with the nutrient names/units.
-        function syncNutrientHeaders() {
-            var headers = document.querySelectorAll('#ingredientsHeaderRow th.nutrient-col');
-            var rows = nutrientBody().rows;
-            for (var k = 0; k < headers.length && k < rows.length; k++) {
-                var name = rows[k].querySelector('input[name$=".Name"]');
-                var unit = rows[k].querySelector('input[name$=".Unit"]');
-                headers[k].textContent = (name ? name.value : '') + (unit && unit.value ? ' (' + unit.value + ')' : '');
-            }
-        }
-    </script>
+    @* Add/remove row behaviour for _FormulationInputs. Loaded per page rather than from
+       site.js, which _Layout loads everywhere — /Market and /Knowledge have no such form. *@
+    <script src="~/js/formulation-panel.js" asp-append-version="true"></script>
 }

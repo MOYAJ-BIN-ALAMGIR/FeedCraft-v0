@@ -1,0 +1,101 @@
+@model FeedCraft.Web.Models.ExperimentPanelViewModel
+
+@*
+    One side of the comparison. Rendered from Index with <partial for="PanelA" />, which sets the
+    field prefix from the expression name — so everything in here posts under PanelA.* / PanelB.*
+    and the model binder fills the right half of the page with no help from us.
+
+    Results sit above the inputs, as on /Feed: the ingredient grid is tall, and putting the two
+    answers at the top keeps them side by side under the summary instead of a screen apart.
+*@
+
+@{
+    var savedFormulations = ViewData["SavedFormulations"] as List<SavedFormulationSummary>
+        ?? new List<SavedFormulationSummary>();
+    var knowledgeTemplates = ViewData["KnowledgeTemplates"] as List<KnowledgeTemplateSummary>
+        ?? new List<KnowledgeTemplateSummary>();
+}
+
+<div class="card">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Panel @Model.Label</h5>
+    </div>
+    <div class="card-body">
+
+        @* Both pickers sit inside the page's single form and retarget one button with
+           formaction, so the live state of *both* panels is posted and only the named one is
+           replaced. A nested <form> would be silently dropped by the browser. *@
+        <div class="border rounded bg-light p-3 mb-3">
+            <div class="mb-3">
+                <label class="form-label small fw-semibold mb-1">Load saved formulation</label>
+                @if (savedFormulations.Count == 0)
+                {
+                    <p class="text-muted small mb-0">
+                        Nothing saved yet &mdash; save a formulation from the
+                        <a asp-controller="Feed" asp-action="Index">formulation page</a> first.
+                    </p>
+                }
+                else
+                {
+                    <div class="row g-2">
+                        <div class="col-sm-7">
+                            <select asp-for="SavedFormulationId" class="form-select form-select-sm">
+                                @foreach (var item in savedFormulations)
+                                {
+                                    <option value="@item.Id">@item.Name &mdash; @item.CreatedAt.ToString("g")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-5">
+                            <button type="submit" class="btn btn-outline-secondary btn-sm"
+                                    formaction="@Url.Action("LoadSaved", "Experiment", new { panel = Model.Label })"
+                                    formmethod="post">
+                                Load into @Model.Label
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0 mt-1">
+                        Read-only: editing this panel afterwards does not change the saved copy.
+                    </p>
+                }
+            </div>
+
+            @if (knowledgeTemplates.Count > 0)
+            {
+                <div>
+                    <label class="form-label small fw-semibold mb-1">Load knowledge base targets</label>
+                    <div class="row g-2">
+                        <div class="col-sm-7">
+                            <select asp-for="TemplateId" class="form-select form-select-sm">
+                                @foreach (var template in knowledgeTemplates)
+                                {
+                                    <option value="@template.Id">@template.Title</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-5">
+                            <button type="submit" class="btn btn-outline-primary btn-sm"
+                                    formaction="@Url.Action("LoadTemplate", "Experiment", new { panel = Model.Label })"
+                                    formmethod="post">
+                                Load into @Model.Label
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0 mt-1">
+                        Replaces this panel's Min and Max values only. Ingredients, costs and
+                        batch size are left alone.
+                    </p>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.LoadedNotice))
+        {
+            <div class="alert alert-secondary py-2 small">@Model.LoadedNotice</div>
+        }
+
+        <partial name="_FormulationResults" for="Formulation" />
+        <partial name="_FormulationInputs" for="Formulation" />
+
+    </div>
+</div>

@@ -11,6 +11,16 @@ builder.Services.AddControllersWithViews();
 // The feed optimizer lives in the Domain layer; inject it rather than new-ing it up.
 builder.Services.AddScoped<IFeedOptimizationService, FeedOptimizationService>();
 
+// Comparing two formulations is pure arithmetic over two view models, so it lives in Domain
+// alongside the optimizer.
+builder.Services.AddScoped<IFormulationComparer, FormulationComparer>();
+
+// Reading the ingredient library, the pickers and the saved snapshots — and copying a knowledge
+// base entry's targets onto a formulation. Shared by /Feed and /Experiment so both pages start
+// from the same data and a template means the same thing on each.
+builder.Services.AddScoped<IFormulationLibraryReader, FormulationLibraryReader>();
+builder.Services.AddScoped<IKnowledgeTemplateApplier, KnowledgeTemplateApplier>();
+
 // Persistence lives in the Infrastructure layer (SQLite file alongside the app).
 builder.Services.AddDbContext<FeedCraftDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));

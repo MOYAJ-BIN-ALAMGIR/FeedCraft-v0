@@ -1,0 +1,155 @@
+@model FeedCraft.Domain.Models.FeedFormulationViewModel
+
+@*
+    The formulation input form: batch size, the ingredient grid, and the nutrient constraints.
+
+    Rendered twice on /Experiment (panels A and B) and once on /Feed, so nothing in here may be
+    identified globally. Two consequences:
+
+      * No element ids of our own — the JS finds its tables through the panel root below.
+        Tag helpers still emit per-field ids, and those are unique because they carry the prefix.
+      * Every field name is prefixed with @ViewData.TemplateInfo.HtmlFieldPrefix. Tag helpers do
+        that for themselves; the one hand-written name below has to do it explicitly.
+
+    On /Feed the partial is rendered with model="Model", so the prefix is empty and every posted
+    name is exactly what it was before this markup moved out of Views/Feed/Index.cshtml. That
+    matters: the saved formulations already in the database were captured under those names.
+*@
+
+@{
+    var prefix = ViewData.TemplateInfo.HtmlFieldPrefix;
+    var jsPrefix = prefix.Length > 0 ? prefix + "." : "";
+}
+
+@* data-prefix comes from the same HtmlFieldPrefix the tag helpers use, so the names the JS
+   builds and the names the browser posts cannot drift apart. See wwwroot/js/formulation-panel.js. *@
+<div class="formulation-panel" data-prefix="@jsPrefix">
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Batch Settings</h5>
+        </div>
+        <div class="card-body">
+            <div class="form-group row">
+                <label class="col-sm-2 col-form-label">Batch Size (kg):</label>
+                <div class="col-sm-4">
+                    <input asp-for="BatchSize" class="form-control" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5>Ingredients</h5>
+            <div>
+                @* `this` lets the handler resolve which panel it was pressed in. *@
+                <button type="button" class="btn btn-primary btn-sm" onclick="addIngredientRow(this)">Add Ingredient</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="addNutrient(this)">Add Nutrient</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm ingredients-table">
+                    <thead>
+                        <tr class="ingredients-header-row">
+                            <th>Name</th>
+                            <th>Cost/Unit</th>
+                            @foreach (var nutrient in Model.NutrientDefinitions)
+                            {
+                                <th class="nutrient-col">@nutrient.Name (@nutrient.Unit)</th>
+                            }
+                            <th class="th-min-pct">Min %</th>
+                            <th>Max %</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < Model.Ingredients.Count; i++)
+                        {
+                            <tr>
+                                <td>
+                                    <input type="hidden" asp-for="Ingredients[i].Id" />
+                                    <input asp-for="Ingredients[i].Name" class="form-control" />
+                                </td>
+                                <td><input asp-for="Ingredients[i].CostPerUnit" class="form-control" step="0.01" /></td>
+
+                                @* One column per nutrient definition — nothing here is hardcoded. *@
+                                @for (int k = 0; k < Model.Ingredients[i].NutrientValues.Count; k++)
+                                {
+                                    <td class="nutrient-cell">
+                                        <input type="hidden" asp-for="Ingredients[i].NutrientValues[k].NutrientDefinitionId" />
+                                        <input asp-for="Ingredients[i].NutrientValues[k].Value" class="form-control" step="0.01" />
+                                    </td>
+                                }
+
+                                <td class="incl-min-cell"><input asp-for="Ingredients[i].MinInclusionPct" class="form-control" step="0.1" placeholder="0" /></td>
+                                <td class="incl-max-cell"><input asp-for="Ingredients[i].MaxInclusionPct" class="form-control" step="0.1" placeholder="100" /></td>
+                                <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Nutrients &amp; Constraints</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-2">
+                Leave Min and Max blank to track a nutrient without constraining it.
+                Min/Max are read in the same unit as the ingredient values, so both
+                <em>%</em> and absolute units such as <em>kcal/kg</em> work as-is.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm nutrients-table">
+                    <thead>
+                        <tr>
+                            <th>Nutrient</th>
+                            <th>Unit</th>
+                            <th class="text-center">Is %</th>
+                            <th>Min Value</th>
+                            <th>Max Value</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int k = 0; k < Model.NutrientDefinitions.Count; k++)
+                        {
+                            <tr>
+                                <td>
+                                    <input type="hidden" asp-for="NutrientDefinitions[k].Id" />
+                                    <input asp-for="NutrientDefinitions[k].Name" class="form-control" oninput="syncNutrientHeaders(this)" />
+                                </td>
+                                <td><input asp-for="NutrientDefinitions[k].Unit" class="form-control" oninput="syncNutrientHeaders(this)" /></td>
+                                <td class="text-center align-middle">
+                                    @* Rendered explicitly rather than with asp-for: the tag helper emits the
+                                       hidden "false" companion at the end of the <form>, where the JS
+                                       re-indexer can't reach it — a removed row would leave a phantom
+                                       NutrientDefinitions[n] behind and bind an empty nutrient.
+
+                                       Because the name is hand-written, it is also the one name in this
+                                       file that has to prepend the panel prefix itself. *@
+                                    <input type="checkbox" class="form-check-input"
+                                           name="@(jsPrefix)NutrientDefinitions[@k].IsPercentage" value="true"
+                                           checked="@Model.NutrientDefinitions[k].IsPercentage" />
+                                    <input type="hidden" name="@(jsPrefix)NutrientDefinitions[@k].IsPercentage" value="false" />
+                                </td>
+                                <td>
+                                    <input type="hidden" asp-for="Constraints[k].NutrientDefinitionId" />
+                                    <input asp-for="Constraints[k].MinValue" class="form-control" step="0.01" />
+                                </td>
+                                <td><input asp-for="Constraints[k].MaxValue" class="form-control" step="0.01" /></td>
+                                <td><button type="button" class="btn btn-danger btn-sm" onclick="removeNutrient(this)">X</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
