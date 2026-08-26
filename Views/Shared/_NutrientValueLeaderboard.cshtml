@@ -1,0 +1,124 @@
+@model FeedCraft.Domain.Models.FeedFormulationViewModel
+
+@*
+    Best value per nutrient. For each nutrient, what every ingredient charges for the nutrient
+    itself rather than for its own mass — so "which is the cheapest protein?" is answerable at a
+    glance, the way a nutritionist would ask it.
+
+    Pure arithmetic over the ingredient grid (price / content), computed fresh on every render by
+    NutrientValueRanking.Build. No solver, no constraints, no batch size, so it is meaningful
+    before anything has been calculated and it cannot alter the optimizer's answer. Deliberately
+    not a view-model property: it would be serialised into saved snapshots and go stale the moment
+    a price changed.
+
+    Lives on /Feed rather than in _FormulationResults so it appears once per page — the two
+    /Experiment panels share the same ingredient list, so a copy in each would say the same thing
+    twice.
+*@
+@{
+    var rankings = NutrientValueRanking.Build(Model.NutrientDefinitions, Model.Ingredients);
+}
+
+@if (rankings.Count > 0 && Model.Ingredients.Count > 0)
+{
+    @* The id is what the print stylesheet hides: a batch sheet is the mix, not the shopping
+       comparison that led to it. *@
+    <div class="card mb-4" id="nutrient-value-leaderboard">
+        <div class="card-header">
+            <h5 class="mb-0">Best Value Per Nutrient</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered table-sm mb-2">
+                <thead>
+                    <tr>
+                        <th>Nutrient</th>
+                        <th>Cheapest source</th>
+                        <th>Price of the nutrient</th>
+                        <th>All sources, cheapest first</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ranking in rankings)
+                    {
+                        @* Composed in C#: Razor reads "@" between word characters as an email
+                           address and would emit "44%@$0.35" verbatim. *@
+                        var unitLabel = ranking.Unit == "%" ? "%" : " " + ranking.Unit;
+                        var cheapest = ranking.Cheapest;
+
+                        <tr>
+                            <td>@ranking.NutrientName <span class="text-muted">(@ranking.Unit)</span></td>
+
+                            @if (cheapest == null)
+                            {
+                                @* Not a cosmetic gap: if nothing supplies the nutrient, any
+                                   minimum on it is unreachable and the solver will report
+                                   infeasible. Worth saying here, where the cause is visible. *@
+                                <td colspan="3" class="text-muted">
+                                    No ingredient supplies this nutrient, so no minimum on it can be met.
+                                </td>
+                            }
+                            else
+                            {
+                                var supply = cheapest.NutrientContent.ToString("0.##") + unitLabel
+                                    + " at $" + cheapest.CostPerUnit.ToString("F2") + "/kg";
+
+                                @* Sub-cent nutrient prices are real — energy costs a few cents
+                                   per 1,000 kcal — so two decimals would round that whole row to
+                                   $0.00. Decided once per row off the cheapest source, which is
+                                   also the smallest number in it, so the row reads consistently. *@
+                                var digits = cheapest.CostPerNutrientUnit >= 0.10 ? "F2" : "F4";
+
+                                <td>
+                                    <strong>@cheapest.IngredientName</strong><br />
+                                    <span class="text-muted small">@supply</span>
+                                </td>
+                                <td>$@cheapest.CostPerNutrientUnit.ToString(digits) <span class="text-muted">per @ranking.Basis</span></td>
+                                <td class="small">
+                                    @for (var i = 0; i < ranking.Sources.Count; i++)
+                                    {
+                                        var source = ranking.Sources[i];
+                                        var entry = source.IngredientName + " $"
+                                            + source.CostPerNutrientUnit.ToString(digits);
+
+                                        if (i > 0)
+                                        {
+                                            <text>&middot; </text>
+                                        }
+                                        <span>@entry</span>
+                                    }
+
+                                    @if (ranking.NonSuppliers.Count > 0)
+                                    {
+                                        <span class="text-muted">
+                                            &mdash; supplies none:
+                                            @for (var i = 0; i < ranking.NonSuppliers.Count; i++)
+                                            {
+                                                if (i > 0)
+                                                {
+                                                    <text>, </text>
+                                                }
+                                                <text>@ranking.NonSuppliers[i]</text>
+                                            }
+                                        </span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <p class="text-muted small mb-0">
+                Each figure is the ingredient's price divided by how much of the nutrient a kilogram
+                of it carries &mdash; so a 44% protein meal at $0.35/kg sells protein at $0.80 per kg,
+                while an 8.5% grain at $0.20/kg sells it at $2.35. Nutrients measured in absolute
+                units are quoted per 1,000 of them, as energy conventionally is.
+                <br />
+                This ranks the raw materials, not the mix: the cheapest source of one nutrient can
+                still be limited or excluded by another target, which is what the optimizer below
+                settles. For a nutrient you cap rather than require, read the column the other way
+                round &mdash; the cheapest source is the one that fills your allowance fastest.
+            </p>
+        </div>
+    </div>
+}

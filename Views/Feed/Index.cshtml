@@ -33,6 +33,10 @@
        model="Model" so the field prefix stays empty and every posted name is unchanged. *@
     <partial name="_FormulationResults" model="Model" />
 
+    @* Reference figures derived from the ingredient grid alone — deliberately outside #feedForm,
+       so it posts nothing and stays readable before anything has been solved. *@
+    <partial name="_NutrientValueLeaderboard" model="Model" />
+
     @* A sibling of #feedForm, never nested inside it — nested forms are invalid HTML and
        the inner one is silently dropped by the browser. *@
     <form asp-action="Load" method="get" class="card mb-4">
@@ -151,6 +155,17 @@
         </div>
 
         <button type="submit" class="btn btn-success btn-lg">Calculate Least Cost Mix</button>
+
+        @* Solves the form and sends the answer back as a file instead of a page, reusing this
+           form's state and antiforgery token exactly as the two buttons above do.
+
+           It belongs here rather than in _FormulationResults, even though that is where the
+           results it exports are shown: that partial is shared with /Experiment, where it renders
+           *inside* #experimentForm, and a nested form would be silently dropped by the browser. *@
+        <button type="submit" class="btn btn-outline-secondary btn-lg"
+                formaction="@Url.Action("DownloadCsv")" formmethod="post">
+            Download CSV
+        </button>
     </form>
 </div>
 

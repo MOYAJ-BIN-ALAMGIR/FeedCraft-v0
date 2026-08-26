@@ -29,3 +29,106 @@ body {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/*
+  Batch sheet. Printing a solved formulation should produce the sheet you hand to the mill
+  floor — the mix, its nutrient analysis and what is driving the cost — and nothing else.
+  Screen rendering is untouched: every rule below is inside @media print.
+
+  Everything that exists to *produce* the answer is dropped: site chrome, the input form, the
+  saved-formulation and template pickers, and the ingredient price comparison. Every <form> in
+  the app is an editor or a picker, so hiding them wholesale is safe — the only ones inside a
+  results table are the inline Delete buttons on the library pages, which have no business on
+  paper either.
+*/
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+
+  header,
+  nav,
+  footer,
+  form,
+  .btn,
+  #nutrient-value-leaderboard,
+  .alert-info,
+  .alert-secondary {
+    display: none !important;
+  }
+
+  body {
+    /* The 60px reserves room for the fixed footer, which is gone here. */
+    margin-bottom: 0;
+    font-size: 11pt;
+    color: #000;
+    background: none;
+  }
+
+  .container,
+  .container-fluid {
+    width: auto;
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  main {
+    padding-bottom: 0 !important;
+  }
+
+  h2 {
+    font-size: 16pt;
+    margin-bottom: 0.5rem;
+  }
+
+  h4, h5 {
+    font-size: 12pt;
+  }
+
+  /* The result arrives in a green alert box. On paper the green is a page of wasted ink and
+     the border adds nothing, so only the content survives. */
+  .alert-success {
+    background: none !important;
+    border: 0 !important;
+    color: #000 !important;
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Bootstrap's table borders and stripes are set in currency the printer would rather drop.
+     Borders are redrawn dark and stripes removed, then print-color-adjust stops the browser
+     helpfully discarding them again. */
+  .table,
+  .table th,
+  .table td {
+    border-color: #333 !important;
+    background: none !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .table {
+    /* A mix table split across two sheets is a mis-read batch waiting to happen. */
+    page-break-inside: avoid;
+    width: 100%;
+  }
+
+  /* Muted greys are unreadable at print contrast; the units and footnotes they carry are not
+     decoration. */
+  .text-muted {
+    color: #333 !important;
+  }
+
+  /* On /Experiment the two panels are side-by-side columns on screen; on paper they stack, so
+     keep each one whole. */
+  .col-lg-6 {
+    page-break-inside: avoid;
+  }
+
+  a {
+    text-decoration: none;
+    color: #000;
+  }
+}

@@ -101,13 +101,24 @@ namespace FeedCraft.Domain.Services
 
             // 3b. Nutrient Constraints — driven entirely by the nutrient definitions,
             //     so a new nutrient participates in the LP with no code changes.
+            //
+            //     The Constraint objects are kept, keyed by nutrient, because step 7 below reads
+            //     their dual values. GLOP is a linear solver, so those duals are meaningful; if
+            //     CreateSolver is ever pointed at a MIP backend (CBC, SCIP) the duals become
+            //     meaningless and the sensitivity output must be suppressed, not reinterpreted.
+            var nutrientConstraints = new Dictionary<int, Constraint>();
             foreach (var constraint in model.Constraints)
             {
                 var nutrient = model.FindNutrient(constraint.NutrientDefinitionId);
                 if (nutrient == null) continue; // orphaned constraint; Normalize() drops these
 
-                AddNutrientConstraint(solver, x, model.Ingredients, nutrient,
-                                      constraint.MinValue, constraint.MaxValue, model.BatchSize);
+                Constraint? lpConstraint = AddNutrientConstraint(solver, x, model.Ingredients, nutrient,
+                                                                constraint.MinValue, constraint.MaxValue, model.BatchSize);
+
+                if (lpConstraint != null)
+                {
+                    nutrientConstraints[nutrient.Id] = lpConstraint;
+                }
             }
 
             // 4. Define Objective Function: Minimize Cost
@@ -148,6 +159,16 @@ namespace FeedCraft.Domain.Services
                     model.CalculatedNutrients[nutrient.Id] = totalNutrientAmount / model.BatchSize;
                 }
 
+                // 7. Sensitivity — the marginal cost of each binding nutrient target. Must come
+                //    after CalculatedNutrients, which is what identifies the binding side.
+                model.ShadowPrices = BuildShadowPrices(model, nutrientConstraints);
+                model.SensitivityComputed = true;
+
+                // 7b. The other half of the same question: not what the targets cost, but which
+                //     ingredients are mispriced for this mix. Reads the variables' reduced costs,
+                //     which like the duals are already sitting in the solved LP.
+                model.ReducedCosts = BuildReducedCosts(model, x);
+
                 model.ErrorMessage = string.Empty;
             }
             else
@@ -159,10 +180,10 @@ namespace FeedCraft.Domain.Services
             return model;
         }
 
-        private void AddNutrientConstraint(Solver solver, Variable[] x, List<Ingredient> ingredients,
+        private Constraint? AddNutrientConstraint(Solver solver, Variable[] x, List<Ingredient> ingredients,
             NutrientDefinition nutrient, double? minPerUnit, double? maxPerUnit, double batchSize)
         {
-            if (!minPerUnit.HasValue && !maxPerUnit.HasValue) return;
+            if (!minPerUnit.HasValue && !maxPerUnit.HasValue) return null;
 
             // The constraint itself is unit-agnostic: min/max are expressed in the same unit as the
             // ingredient values, so this works for "%" and "kcal/kg" alike without conversion.
@@ -187,6 +208,182 @@ namespace FeedCraft.Domain.Services
             {
                 constraint.SetCoefficient(x[i], ingredients[i].GetNutrientValue(nutrient.Id));
             }
+
+            return constraint;
         }
+
+        /// <summary>
+        /// Anything smaller than this is floating-point dust from the simplex, not a real
+        /// marginal cost. The threshold exists to reject noise, not to make a judgement about
+        /// which constraints are worth reporting.
+        /// </summary>
+        private const double DualTolerance = 1e-9;
+
+        /// <summary>
+        /// Reads the dual value of every binding nutrient constraint and turns it into money.
+        /// Only meaningful after a successful solve, and only because the solver is an LP —
+        /// see the note at step 3b.
+        ///
+        /// A dual answers "if this requirement moved by one unit, what would that do to the
+        /// batch cost?". Zero means the mix is not pressed against the target at all, so it is
+        /// skipped: what comes back is a list of what is actually driving the price, not a row
+        /// per nutrient.
+        /// </summary>
+        private Dictionary<int, NutrientShadowPrice> BuildShadowPrices(
+            FeedFormulationViewModel model, Dictionary<int, Constraint> nutrientConstraints)
+        {
+            var shadowPrices = new Dictionary<int, NutrientShadowPrice>();
+
+            foreach (var pair in nutrientConstraints)
+            {
+                var nutrient = model.FindNutrient(pair.Key);
+                var bounds = model.FindConstraint(pair.Key);
+                if (nutrient == null || bounds == null) continue;
+
+                double dual = pair.Value.DualValue();
+                if (Math.Abs(dual) <= DualTolerance) continue;
+
+                if (TryFindBindingSide(model.CalculatedNutrients, pair.Key, bounds,
+                                       out BindingSide side, out double boundValue))
+                {
+                    shadowPrices[pair.Key] = NutrientShadowPrice.From(nutrient, side, boundValue, dual);
+                }
+            }
+
+            return shadowPrices;
+        }
+
+        /// <summary>
+        /// Reads the reduced cost of every ingredient variable and turns it into a verdict on that
+        /// ingredient's price. Same preconditions as <see cref="BuildShadowPrices"/>: after a
+        /// successful solve, and only valid because the solver is an LP.
+        ///
+        /// A reduced cost is zero for any ingredient the optimizer chose freely — it is worth
+        /// exactly what it costs here — so those are skipped and what comes back is a list of the
+        /// ingredients whose price is the reason they are stuck on an inclusion limit.
+        /// </summary>
+        private Dictionary<int, IngredientReducedCost> BuildReducedCosts(
+            FeedFormulationViewModel model, Variable[] x)
+        {
+            var reducedCosts = new Dictionary<int, IngredientReducedCost>();
+
+            for (int i = 0; i < model.Ingredients.Count; i++)
+            {
+                double reduced = x[i].ReducedCost();
+                if (Math.Abs(reduced) <= DualTolerance) continue;
+
+                var ingredient = model.Ingredients[i];
+
+                // The same bounds step 2 gave the variable, recomputed rather than stored: they
+                // are a pure function of the inclusion percentages and the batch size.
+                double lower = (ingredient.MinInclusionPct ?? 0.0) / 100.0 * model.BatchSize;
+                double upper = (ingredient.MaxInclusionPct ?? 100.0) / 100.0 * model.BatchSize;
+                double quantity = x[i].SolutionValue();
+
+                InclusionVerdict verdict;
+
+                if (quantity <= lower + NutrientHeadroom.Tolerance(lower))
+                {
+                    // Resting on its floor. A floor of zero means the optimizer simply refused to
+                    // buy it; a floor above zero means the user's own minimum is forcing it in.
+                    verdict = lower > 0.0
+                        ? InclusionVerdict.HeldInByMinimum
+                        : InclusionVerdict.PricedOut;
+                }
+                else if (quantity >= upper - NutrientHeadroom.Tolerance(upper))
+                {
+                    verdict = InclusionVerdict.CappedByMaximum;
+                }
+                else
+                {
+                    // Strictly inside its limits, so the reduced cost should have been zero and
+                    // this is numerical noise above the tolerance. Reporting nothing beats
+                    // inventing a verdict about a variable the optimizer chose freely.
+                    continue;
+                }
+
+                reducedCosts[ingredient.Id] =
+                    IngredientReducedCost.From(ingredient, verdict, reduced, quantity);
+            }
+
+            return reducedCosts;
+        }
+
+        /// <summary>
+        /// Works out which end of a min/max range the achieved level is sitting on, by comparing
+        /// it against the bounds rather than by reading the dual's sign.
+        ///
+        /// One OR-Tools Constraint carries both bounds at once, so the side has to be inferred
+        /// from somewhere. Splitting each range into two single-sided constraints would answer it
+        /// directly, but that changes the shape of the LP, and on a degenerate vertex a different
+        /// row count can resolve ties differently and quietly move a known-good result. The
+        /// achieved level is already computed above, so this costs nothing and leaves the LP alone.
+        ///
+        /// Returns false only if the level is on neither bound, which a non-zero dual makes
+        /// impossible — an active constraint sits on one of its bounds by definition. Reporting
+        /// nothing beats reporting a side that might be the wrong one.
+        /// </summary>
+        private static bool TryFindBindingSide(Dictionary<int, double> calculatedNutrients,
+            int nutrientId, NutrientConstraint bounds, out BindingSide side, out double boundValue)
+        {
+            side = BindingSide.Minimum;
+            boundValue = 0.0;
+
+            if (!bounds.MaxValue.HasValue)
+            {
+                if (!bounds.MinValue.HasValue) return false;
+                side = BindingSide.Minimum;
+                boundValue = bounds.MinValue.Value;
+                return true;
+            }
+
+            if (!bounds.MinValue.HasValue)
+            {
+                side = BindingSide.Maximum;
+                boundValue = bounds.MaxValue.Value;
+                return true;
+            }
+
+            double min = bounds.MinValue.Value;
+            double max = bounds.MaxValue.Value;
+            double achieved = calculatedNutrients.TryGetValue(nutrientId, out var level) ? level : 0.0;
+
+            bool onMin = achieved <= min + Tolerance(min);
+            bool onMax = achieved >= max - Tolerance(max);
+
+            if (onMin && onMax)
+            {
+                // min == max, so the level is pinned from both directions at once.
+                side = BindingSide.Fixed;
+                boundValue = min;
+                return true;
+            }
+
+            if (onMin)
+            {
+                side = BindingSide.Minimum;
+                boundValue = min;
+                return true;
+            }
+
+            if (onMax)
+            {
+                side = BindingSide.Maximum;
+                boundValue = max;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Relative, so "on the bound" means the same thing for a 1.5% lysine target as for a
+        /// 2950 kcal/kg energy target.
+        ///
+        /// Delegates rather than repeating the formula: the nutrient-analysis table decides whether
+        /// to print "At maximum" or "1.96% below max" using the same test, and the two disagreeing
+        /// would let one table contradict the other by a rounding error.
+        /// </summary>
+        private static double Tolerance(double bound) => NutrientHeadroom.Tolerance(bound);
     }
 }

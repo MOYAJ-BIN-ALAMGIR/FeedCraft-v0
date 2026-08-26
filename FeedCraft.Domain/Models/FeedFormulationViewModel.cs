@@ -30,6 +30,35 @@ namespace FeedCraft.Domain.Models
         public decimal TotalCost { get; set; }
         public Dictionary<int, double> OptimizedQuantities { get; set; } = new Dictionary<int, double>();
         public Dictionary<int, double> CalculatedNutrients { get; set; } = new Dictionary<int, double>();
+
+        /// <summary>
+        /// The marginal cost of each <i>binding</i> nutrient target, keyed by nutrient Id.
+        /// Targets with slack are absent rather than present-with-zero: a zero dual means the
+        /// constraint is not driving the price, so there is nothing to report about it.
+        /// </summary>
+        public Dictionary<int, NutrientShadowPrice> ShadowPrices { get; set; } = new Dictionary<int, NutrientShadowPrice>();
+
+        /// <summary>
+        /// True once the solver has been asked for dual values. Distinguishes "analysed, and
+        /// nothing is binding" from "never analysed" — an empty <see cref="ShadowPrices"/> means
+        /// the first only if this is set. Snapshots saved before sensitivity analysis existed
+        /// deserialize with this false, so they render no sensitivity section rather than
+        /// claiming that none of their targets were binding.
+        /// </summary>
+        public bool SensitivityComputed { get; set; }
+
+        /// <summary>
+        /// Why an ingredient is stuck on an inclusion limit, keyed by ingredient Id. Ingredients
+        /// the optimizer chose freely are absent rather than present-with-zero, for the same reason
+        /// slack targets are absent from <see cref="ShadowPrices"/>: a zero reduced cost means the
+        /// ingredient is worth what it costs here, so there is nothing to say about it.
+        ///
+        /// No companion "was this computed" flag, deliberately. The section that renders this shows
+        /// nothing at all when the dictionary is empty, so a snapshot saved before reduced costs
+        /// existed stays silent instead of claiming every ingredient was freely chosen.
+        /// </summary>
+        public Dictionary<int, IngredientReducedCost> ReducedCosts { get; set; } = new Dictionary<int, IngredientReducedCost>();
+
         public string ErrorMessage { get; set; } = string.Empty;
 
         public NutrientDefinition? FindNutrient(int id) =>

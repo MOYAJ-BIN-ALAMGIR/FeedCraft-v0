@@ -109,6 +109,9 @@ namespace FeedCraft.Infrastructure.Data
                 model.TotalCost = results.TotalCost;
                 model.OptimizedQuantities = results.OptimizedQuantities;
                 model.CalculatedNutrients = results.CalculatedNutrients;
+                model.ShadowPrices = results.ShadowPrices;
+                model.SensitivityComputed = results.SensitivityComputed;
+                model.ReducedCosts = results.ReducedCosts;
                 model.ErrorMessage = results.ErrorMessage;
             }
 

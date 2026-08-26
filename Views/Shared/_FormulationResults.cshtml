@@ -14,12 +14,29 @@
             <h4>Optimization Result</h4>
             <p><strong>Total Cost:</strong> $@Model.TotalCost.ToString("F2")</p>
 
+            @{
+                // Both totals are computed before the rows are written, because each row shows its
+                // share of the cost and that needs the denominator up front. The totals row below
+                // then prints these same two numbers, so it is a genuine sum of the columns above
+                // it — and the cost column adding up to the headline total is visible, not assumed.
+                double quantityTotal = 0.0;
+                decimal costTotal = 0m;
+
+                foreach (var item in Model.Ingredients)
+                {
+                    double itemQty = Model.OptimizedQuantities.TryGetValue(item.Id, out var iq) ? iq : 0.0;
+                    quantityTotal += itemQty;
+                    costTotal += (decimal)itemQty * item.CostPerUnit;
+                }
+            }
+
             <table class="table table-bordered table-striped">
                 <thead>
                     <tr>
                         <th>Ingredient</th>
                         <th>Quantity (kg)</th>
                         <th>% of Batch</th>
+                        <th>Cost</th>
                         <th>Limit (Min&ndash;Max %)</th>
                     </tr>
                 </thead>
@@ -29,14 +46,34 @@
                         var qty = Model.OptimizedQuantities.TryGetValue(ingredient.Id, out var q) ? q : 0.0;
                         var minLbl = (ingredient.MinInclusionPct ?? 0).ToString("0.##");
                         var maxLbl = (ingredient.MaxInclusionPct ?? 100).ToString("0.##");
+
+                        // What this ingredient contributes to the bill, and how much of the bill
+                        // that is — the two questions the quantity column cannot answer, since a
+                        // cheap bulk ingredient and a dear micro-ingredient read alike in kg.
+                        var lineCost = (decimal)qty * ingredient.CostPerUnit;
+                        var costShare = costTotal > 0m ? lineCost / costTotal * 100m : 0m;
+
                         <tr>
                             <td>@ingredient.Name</td>
                             <td>@qty.ToString("F2")</td>
                             <td>@((qty / Model.BatchSize * 100).ToString("F2"))%</td>
+                            <td>
+                                $@lineCost.ToString("F2")
+                                <span class="text-muted small d-block">@costShare.ToString("F1")%</span>
+                            </td>
                             <td>@minLbl &ndash; @maxLbl</td>
                         </tr>
                     }
                 </tbody>
+                <tfoot>
+                    <tr class="fw-semibold">
+                        <td>Total</td>
+                        <td>@quantityTotal.ToString("F2")</td>
+                        <td>@((quantityTotal / Model.BatchSize * 100).ToString("F2"))%</td>
+                        <td>$@costTotal.ToString("F2")</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
             </table>
 
             <h5 class="mt-4">Nutrient Analysis</h5>
@@ -46,6 +83,7 @@
                         <th>Nutrient</th>
                         <th>Value</th>
                         <th>Target (Min - Max)</th>
+                        <th>Headroom</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -56,14 +94,227 @@
                         var min = constraint?.MinValue?.ToString("F2") ?? "-";
                         var max = constraint?.MaxValue?.ToString("F2") ?? "-";
 
+                        // How much room is left before this target bites. It is what makes the
+                        // sensitivity table's absences readable: a nutrient is missing from it
+                        // because it has slack, and this says how much.
+                        var headroom = NutrientHeadroom.From(nutrient, constraint, value);
+                        var headroomLabel = headroom.Describe(nutrient.Unit);
+
                         <tr>
                             <td>@nutrient.Name <span class="text-muted">(@nutrient.Unit)</span></td>
                             <td>@value.ToString("F2")</td>
                             <td>@min - @max</td>
+                            <td>
+                                @if (headroom.Status == HeadroomStatus.Unconstrained)
+                                {
+                                    <span class="text-muted">@headroomLabel</span>
+                                }
+                                else if (headroom.Status == HeadroomStatus.HasRoom)
+                                {
+                                    @headroomLabel
+                                }
+                                else
+                                {
+                                    @* Pinned against a bound — the rows the sensitivity table
+                                       below is about, so they are marked to match. *@
+                                    <span class="fw-semibold">@headroomLabel</span>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
             </table>
+
+            @*
+                Sensitivity. Which targets are actually holding the price up, and what each one
+                costs. Rendered only when the solver was asked for dual values: an old snapshot
+                has none recorded, and must not be described as having nothing binding.
+            *@
+            @if (Model.SensitivityComputed)
+            {
+                <h5 class="mt-4">Sensitivity &mdash; What's Driving The Cost</h5>
+
+                @if (Model.ShadowPrices.Count == 0)
+                {
+                    <p class="small mb-0">
+                        No nutrient target is binding here. Every one of them has room to spare, so
+                        relaxing any single target slightly would not make this mix any cheaper.
+                    </p>
+                }
+                else
+                {
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr>
+                                <th>Nutrient</th>
+                                <th>Binding at</th>
+                                <th>Shadow price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @* Driven by NutrientDefinitions rather than by the dictionary, so these
+                               rows stay in the same order as the two tables above. *@
+                            @foreach (var nutrient in Model.NutrientDefinitions)
+                            {
+                                if (!Model.ShadowPrices.TryGetValue(nutrient.Id, out var price))
+                                {
+                                    continue;
+                                }
+
+                                var unit = nutrient.Unit == "%" ? "%" : " " + nutrient.Unit;
+                                var side = price.Side == BindingSide.Minimum ? "Minimum"
+                                         : price.Side == BindingSide.Maximum ? "Maximum"
+                                         : "Fixed at";
+
+                                // An absolute-unit nutrient (ME, say) is worth pennies per single
+                                // kcal/kg, so two decimals would round every one of them to $0.00.
+                                var rate = price.CostPerTonnePerUnit >= 1.0
+                                    ? price.CostPerTonnePerUnit.ToString("F2")
+                                    : price.CostPerTonnePerUnit.ToString("F4");
+
+                                // Composed here rather than inline: Razor reads "1@unit" as an
+                                // email address and emits it verbatim.
+                                var rateLabel = "$" + rate + " per tonne, per 1" + unit;
+
+                                <tr>
+                                    <td>@nutrient.Name <span class="text-muted">(@nutrient.Unit)</span></td>
+                                    <td>@side @price.BoundValue.ToString("F2")</td>
+                                    <td>@rateLabel</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <ul class="mb-2">
+                        @foreach (var nutrient in Model.NutrientDefinitions)
+                        {
+                            if (!Model.ShadowPrices.TryGetValue(nutrient.Id, out var price))
+                            {
+                                continue;
+                            }
+
+                            var unit = nutrient.Unit == "%" ? "%" : " " + nutrient.Unit;
+                            var step = price.Delta.ToString("0.####") + unit;
+
+                            <li>
+                                @* "Lowering"/"Raising" rather than "relaxing": for a maximum,
+                                   relaxing means moving the number up, which is worth saying
+                                   outright instead of leaving the reader to work out. *@
+                                @if (price.Side == BindingSide.Minimum)
+                                {
+                                    <text>Lowering the <strong>@nutrient.Name</strong> minimum by @step</text>
+                                }
+                                else if (price.Side == BindingSide.Maximum)
+                                {
+                                    <text>Raising the <strong>@nutrient.Name</strong> maximum by @step</text>
+                                }
+                                else
+                                {
+                                    <text>Widening the <strong>@nutrient.Name</strong> target by &plusmn;@step</text>
+                                }
+
+                                @* Below a cent, "approximately $0.00" would read as "this target is
+                                   free" when it is only cheap. *@
+                                @if (price.SavingPerTonne < 0.005m)
+                                {
+                                    <text>would save less than <strong>$0.01 per tonne</strong>.</text>
+                                }
+                                else
+                                {
+                                    <text>
+                                        would save approximately
+                                        <strong>$@price.SavingPerTonne.ToString("F2") per tonne</strong>.
+                                    </text>
+                                }
+                            </li>
+                        }
+                    </ul>
+
+                    <p class="text-muted small mb-0">
+                        These are marginal values from the linear program's dual solution &mdash; what
+                        relaxing each binding target buys you, per tonne of feed, valid for small
+                        changes only. Nutrients not listed have slack: moving them slightly costs
+                        nothing.
+                    </p>
+                }
+            }
+
+            @*
+                The mirror of the section above: not what the targets cost, but which ingredients are
+                mispriced for this mix. Absent entirely when the dictionary is empty — a snapshot
+                saved before reduced costs existed must not be presented as one where every
+                ingredient was chosen freely.
+            *@
+            @if (Model.ReducedCosts.Count > 0)
+            {
+                <h5 class="mt-4">Ingredient Economics &mdash; Why Each Limit Holds</h5>
+
+                <ul class="mb-2">
+                    @* Driven by the ingredient list, so these read in the same order as the mix. *@
+                    @foreach (var ingredient in Model.Ingredients)
+                    {
+                        if (!Model.ReducedCosts.TryGetValue(ingredient.Id, out var economics))
+                        {
+                            continue;
+                        }
+
+                        // Composed in C# rather than inline: "$0.90/kg" is fine, but keeping every
+                        // figure in one place is what stops a stray @ from being read as an email
+                        // address further down the sentence.
+                        var priceLabel = "$" + economics.CostPerUnit.ToString("F2") + "/kg";
+                        var gapLabel = "$" + economics.PerKg.ToString("F4") + "/kg";
+                        var breakEvenLabel = "$" + economics.BreakEvenCost.ToString("F4") + "/kg";
+                        var minLabel = (ingredient.MinInclusionPct ?? 0).ToString("0.##") + "%";
+                        var maxLabel = (ingredient.MaxInclusionPct ?? 100).ToString("0.##") + "%";
+
+                        <li>
+                            @if (economics.Verdict == InclusionVerdict.PricedOut)
+                            {
+                                <text>
+                                    <strong>@ingredient.Name</strong> is not in the mix: at @priceLabel
+                                    it is @gapLabel too expensive to earn a place here.
+                                </text>
+
+                                @if (economics.CanEverPayOff)
+                                {
+                                    <text>It would start to pay off below about @breakEvenLabel.</text>
+                                }
+                                else
+                                {
+                                    @* Break-even at or below zero: it is not merely dear. *@
+                                    <text>
+                                        Even free it would not earn a place, because of what it does
+                                        to the binding targets.
+                                    </text>
+                                }
+                            }
+                            else if (economics.Verdict == InclusionVerdict.HeldInByMinimum)
+                            {
+                                <text>
+                                    <strong>@ingredient.Name</strong> is in the mix only because its
+                                    minimum inclusion of @minLabel requires it: at @priceLabel, every
+                                    kilogram forced in adds about @gapLabel to the batch.
+                                </text>
+                            }
+                            else
+                            {
+                                <text>
+                                    <strong>@ingredient.Name</strong> is held at its maximum inclusion
+                                    of @maxLabel &mdash; the mix would take more of it. Each extra
+                                    kilogram allowed would save about @gapLabel.
+                                </text>
+                            }
+                        </li>
+                    }
+                </ul>
+
+                <p class="text-muted small mb-0">
+                    Reduced costs, from the same dual solution, so the same caveat applies: they are
+                    marginal values that hold for small price moves rather than large ones.
+                    Ingredients not listed were chosen freely &mdash; in this mix they are worth
+                    what they cost.
+                </p>
+            }
         </div>
     }
     else if (!string.IsNullOrEmpty(Model.ErrorMessage))

@@ -6,6 +6,7 @@ using FeedCraft.Infrastructure.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 
 namespace FeedCraft.Web.Controllers
@@ -119,6 +120,9 @@ namespace FeedCraft.Web.Controllers
                     TotalCost = result.TotalCost,
                     OptimizedQuantities = result.OptimizedQuantities,
                     CalculatedNutrients = result.CalculatedNutrients,
+                    ShadowPrices = result.ShadowPrices,
+                    SensitivityComputed = result.SensitivityComputed,
+                    ReducedCosts = result.ReducedCosts,
                     ErrorMessage = result.ErrorMessage
                 })
             };
@@ -129,6 +133,47 @@ namespace FeedCraft.Web.Controllers
             TempData["FormulationResult"] = JsonSerializer.Serialize(result);
             TempData["LibraryMessage"] = $"Saved formulation \"{saved.Name}\".";
             return RedirectToAction(nameof(Result));
+        }
+
+        /// <summary>
+        /// Exports the solved mix as a CSV file: the batch sheet, plus the two explanations
+        /// (what each binding target costs, and why an ingredient sits on a limit).
+        ///
+        /// A POST for the same reason LoadTemplate is: results are rendered output, not form
+        /// fields, so the only way to export what is on screen is to post the inputs and solve
+        /// them again. Nothing is written to the database.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult DownloadCsv(FeedFormulationViewModel model)
+        {
+            model.Normalize();
+
+            if (!ValidateFormulation(model))
+            {
+                LoadFormPickers();
+                return View("Index", model);
+            }
+
+            var result = _optimizer.OptimizeFeed(model);
+
+            if (!result.IsSolved)
+            {
+                // Nothing to export. Re-render so the reason appears on screen, rather than
+                // downloading a file whose only content is the failure.
+                LoadFormPickers();
+                return View("Index", result);
+            }
+
+            var exportedAt = DateTime.Now;
+            string csv = FormulationCsvWriter.Write(result, exportedAt);
+
+            // The byte-order mark is what makes Excel open this as UTF-8. Without it, an
+            // ingredient name outside ASCII arrives mangled.
+            byte[] bytes = Encoding.UTF8.GetBytes("\uFEFF" + csv);
+
+            return File(bytes, "text/csv",
+                        FormulationCsvWriter.SuggestFileName(result.SaveName, exportedAt));
         }
 
         /// <summary>
