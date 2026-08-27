@@ -1,36 +1,143 @@
 @model FeedCraft.Domain.Models.FeedFormulationViewModel
+@using System.Globalization
 
 @*
-    The solved result for one formulation: total cost, the mix, and the nutrient analysis it
-    achieves. Moved out of Views/Feed/Index.cshtml unchanged so /Experiment can show the same
-    block once per panel — including the indentation, so the rendered HTML stays comparable.
+    The solved result for one formulation, laid out as the batch ticket the app already prints:
+    what it cost and what is in it at the top, the mix and its assay in the middle, and what the
+    binding targets cost at the bottom.
 
-    Reads nothing but the model, so it is safe to render as many times per page as there are
-    formulations.
+    Rendered once on /Feed and /Feed/Result and once per panel on /Experiment, so it reads nothing
+    but the model and identifies nothing globally.
+
+    The wrapper keeps `alert alert-success`. That class occurs nowhere else in the app, so it can
+    carry the ticket's own styling as well as the print rule that flattens it for paper.
 *@
     @if (Model.IsSolved)
     {
-        <div class="alert alert-success">
-            <h4>Optimization Result</h4>
-            <p><strong>Total Cost:</strong> $@Model.TotalCost.ToString("F2")</p>
+        <div class="alert alert-success fc-ticket">
 
             @{
-                // Both totals are computed before the rows are written, because each row shows its
-                // share of the cost and that needs the denominator up front. The totals row below
-                // then prints these same two numbers, so it is a genuine sum of the columns above
-                // it — and the cost column adding up to the headline total is visible, not assumed.
+                // Everything the readout above the tables needs, gathered in one pass. The pass was
+                // already here — each row shows its share of the cost, which needs the denominator
+                // up front — so the figures and the composition bar are additions to it rather than
+                // a second and third walk over the same list. The totals row below then prints
+                // these same two sums, so the cost column adding up to the headline total is
+                // visible rather than assumed.
                 double quantityTotal = 0.0;
                 decimal costTotal = 0m;
+                int usedCount = 0;
+
+                // Name and share per ingredient, in ingredient order, for the composition bar and
+                // its key. Both are written from this one list, so a given ingredient is the same
+                // :nth-child in each and the colour cycle in site.css keeps them in step.
+                var mixShares = new List<(string Name, double Pct, bool Used)>();
 
                 foreach (var item in Model.Ingredients)
                 {
                     double itemQty = Model.OptimizedQuantities.TryGetValue(item.Id, out var iq) ? iq : 0.0;
                     quantityTotal += itemQty;
                     costTotal += (decimal)itemQty * item.CostPerUnit;
+
+                    // 0.005 kg is the smallest quantity that still shows as something other than
+                    // 0.00 in the table below. Using the same test for the "used" count, the bar and
+                    // the key means all four agree about what counts as being in the mix — GLOP
+                    // returns simplex dust like 1e-13 for an ingredient it rejected, and three
+                    // different thresholds would report it three different ways.
+                    bool used = itemQty >= 0.005;
+                    if (used)
+                    {
+                        usedCount++;
+                    }
+
+                    double pct = Model.BatchSize > 0 ? itemQty / Model.BatchSize * 100.0 : 0.0;
+                    mixShares.Add((item.Name, pct, used));
                 }
+
+                // Guarded, unlike the percentage columns below: those divide doubles, which yields
+                // infinity, but decimal division by zero throws. The batch size is validated before
+                // a solve, so this is a floor rather than an expected case.
+                decimal costPerKg = Model.BatchSize > 0 ? costTotal / (decimal)Model.BatchSize : 0m;
+
+                // Invariant on both the visible figure and the JS target. The count-up in site.js
+                // writes JavaScript's own number format, which always uses a dot, so rendering the
+                // server's copy invariantly is what guarantees the animation lands on exactly the
+                // string that was already there.
+                var totalCostText = Model.TotalCost.ToString("F2", CultureInfo.InvariantCulture);
             }
 
-            <table class="table table-bordered table-striped">
+            <div class="fc-ticket-head">
+                <h4 class="fc-ticket-title">Optimization result</h4>
+                <span class="fc-stamp">Solved</span>
+            </div>
+
+            <div class="fc-ticket-readout">
+                <div class="fc-figures">
+                    <div class="fc-figure fc-figure-hero">
+                        <div class="fc-figure-value fc-num" data-fc-countup="@totalCostText">
+                            <span class="fc-cur">৳</span><span data-fc-countup-out>@totalCostText</span>
+                        </div>
+                        <div class="fc-figure-label">Total cost</div>
+                    </div>
+                    <div class="fc-figure">
+                        <div class="fc-figure-value fc-num">
+                            <span class="fc-cur">৳</span>@costPerKg.ToString("F4")
+                        </div>
+                        <div class="fc-figure-label">Per kg</div>
+                    </div>
+                    <div class="fc-figure">
+                        <div class="fc-figure-value fc-num">@Model.BatchSize.ToString("0.##")</div>
+                        <div class="fc-figure-label">Batch, kg</div>
+                    </div>
+                    <div class="fc-figure">
+                        <div class="fc-figure-value fc-num">@usedCount / @Model.Ingredients.Count</div>
+                        <div class="fc-figure-label">Ingredients used</div>
+                    </div>
+                </div>
+
+                @*
+                    The composition bar. Segment widths are the same percentages the % of Batch
+                    column prints, so it is a second reading of the table rather than a separate
+                    claim — which is also why it is aria-hidden: the key below states every name and
+                    figure in it as text, and announcing four empty divs would only add noise.
+
+                    Invariant formatting is not cosmetic here: a culture that writes 42,24 would
+                    hand CSS a flex-basis it silently discards.
+                *@
+                <div class="fc-mixbar" aria-hidden="true">
+                    @foreach (var share in mixShares)
+                    {
+                        if (share.Used)
+                        {
+                            <div class="fc-seg" style="flex-basis: @share.Pct.ToString("0.####", CultureInfo.InvariantCulture)%"></div>
+                        }
+                        else
+                        {
+                            <div class="fc-seg fc-seg-out"></div>
+                        }
+                    }
+                </div>
+
+                <ul class="fc-mixkey">
+                    @foreach (var share in mixShares)
+                    {
+                        <li class="@(share.Used ? "fc-key" : "fc-key fc-key-out")">
+                            <span class="fc-swatch"></span>
+                            @share.Name
+                            <span class="fc-num">@share.Pct.ToString("F2")%</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+
+            <div class="fc-ticket-body">
+
+            <h5>Mix</h5>
+            @* Wrapped because .fc-ticket clips to its own rounded border: a five-column numeric
+               table needs about 460px, so on a phone the last two columns were cut off with nothing
+               to scroll. The wrapper is inert at any width that fits — same treatment the ingredient
+               grid in _FormulationInputs already gets — and the print block opts back out of it. *@
+            <div class="table-responsive">
+            <table class="table table-bordered table-striped fc-tabular">
                 <thead>
                     <tr>
                         <th>Ingredient</th>
@@ -58,7 +165,7 @@
                             <td>@qty.ToString("F2")</td>
                             <td>@((qty / Model.BatchSize * 100).ToString("F2"))%</td>
                             <td>
-                                $@lineCost.ToString("F2")
+                                ৳@lineCost.ToString("F2")
                                 <span class="text-muted small d-block">@costShare.ToString("F1")%</span>
                             </td>
                             <td>@minLbl &ndash; @maxLbl</td>
@@ -70,14 +177,16 @@
                         <td>Total</td>
                         <td>@quantityTotal.ToString("F2")</td>
                         <td>@((quantityTotal / Model.BatchSize * 100).ToString("F2"))%</td>
-                        <td>$@costTotal.ToString("F2")</td>
+                        <td>৳@costTotal.ToString("F2")</td>
                         <td></td>
                     </tr>
                 </tfoot>
             </table>
+            </div>
 
-            <h5 class="mt-4">Nutrient Analysis</h5>
-            <table class="table table-bordered table-sm">
+            <h5>Nutrient Analysis</h5>
+            <div class="table-responsive">
+            <table class="table table-bordered table-sm fc-tabular">
                 <thead>
                     <tr>
                         <th>Nutrient</th>
@@ -100,11 +209,18 @@
                         var headroom = NutrientHeadroom.From(nutrient, constraint, value);
                         var headroomLabel = headroom.Describe(nutrient.Unit);
 
-                        <tr>
+                        // Neither unconstrained nor holding any room means the level is sitting on a
+                        // bound — exactly the rows the sensitivity table below is about. Hoisted out
+                        // of the branch that already draws this distinction so the row and the cell
+                        // cannot disagree about it.
+                        var isPinned = headroom.Status != HeadroomStatus.Unconstrained
+                                    && headroom.Status != HeadroomStatus.HasRoom;
+
+                        <tr class="@(isPinned ? "fc-bind" : null)">
                             <td>@nutrient.Name <span class="text-muted">(@nutrient.Unit)</span></td>
                             <td>@value.ToString("F2")</td>
                             <td>@min - @max</td>
-                            <td>
+                            <td class="fc-text">
                                 @if (headroom.Status == HeadroomStatus.Unconstrained)
                                 {
                                     <span class="text-muted">@headroomLabel</span>
@@ -115,15 +231,18 @@
                                 }
                                 else
                                 {
-                                    @* Pinned against a bound — the rows the sensitivity table
-                                       below is about, so they are marked to match. *@
-                                    <span class="fw-semibold">@headroomLabel</span>
+                                    @* Pinned against a bound. Stamped rather than merely bolded, and
+                                       the row carries the flag edge that the sensitivity rows below
+                                       carry too, so the two tables visibly describe the same
+                                       constraints. *@
+                                    <span class="fc-chip fc-chip-bind">@headroomLabel</span>
                                 }
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
+            </div>
 
             @*
                 Sensitivity. Which targets are actually holding the price up, and what each one
@@ -132,7 +251,7 @@
             *@
             @if (Model.SensitivityComputed)
             {
-                <h5 class="mt-4">Sensitivity &mdash; What's Driving The Cost</h5>
+                <h5>Sensitivity &mdash; What's Driving The Cost</h5>
 
                 @if (Model.ShadowPrices.Count == 0)
                 {
@@ -143,7 +262,8 @@
                 }
                 else
                 {
-                    <table class="table table-bordered table-sm">
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-sm fc-tabular">
                         <thead>
                             <tr>
                                 <th>Nutrient</th>
@@ -167,25 +287,32 @@
                                          : "Fixed at";
 
                                 // An absolute-unit nutrient (ME, say) is worth pennies per single
-                                // kcal/kg, so two decimals would round every one of them to $0.00.
+                                // kcal/kg, so two decimals would round every one of them to ৳0.00.
                                 var rate = price.CostPerTonnePerUnit >= 1.0
                                     ? price.CostPerTonnePerUnit.ToString("F2")
                                     : price.CostPerTonnePerUnit.ToString("F4");
 
-                                // Composed here rather than inline: Razor reads "1@unit" as an
-                                // email address and emits it verbatim.
-                                var rateLabel = "$" + rate + " per tonne, per 1" + unit;
+                                // Composed here rather than inline, in two pieces so the figure can
+                                // be set in the data face while the words around it are not: Razor
+                                // reads both "৳@rate" and "1@unit" as email addresses and emits them
+                                // verbatim.
+                                var rateFigure = "৳" + rate;
+                                var ratePer = " per tonne, per 1" + unit;
 
-                                <tr>
+                                @* Every row in this table is, by definition, a binding constraint —
+                                   which is why they all carry the same marker the pinned rows in the
+                                   assay table carry. *@
+                                <tr class="fc-bind">
                                     <td>@nutrient.Name <span class="text-muted">(@nutrient.Unit)</span></td>
-                                    <td>@side @price.BoundValue.ToString("F2")</td>
-                                    <td>@rateLabel</td>
+                                    <td class="fc-text">@side <span class="fc-num">@price.BoundValue.ToString("F2")</span></td>
+                                    <td class="fc-text"><span class="fc-num">@rateFigure</span>@ratePer</td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                    </div>
 
-                    <ul class="mb-2">
+                    <ul class="fc-notes">
                         @foreach (var nutrient in Model.NutrientDefinitions)
                         {
                             if (!Model.ShadowPrices.TryGetValue(nutrient.Id, out var price))
@@ -196,7 +323,9 @@
                             var unit = nutrient.Unit == "%" ? "%" : " " + nutrient.Unit;
                             var step = price.Delta.ToString("0.####") + unit;
 
-                            <li>
+                            @* One note per binding target, carrying the same flag edge as the table
+                               rows: each of these is a statement about one of those bounds. *@
+                            <li class="fc-note fc-note-bind">
                                 @* "Lowering"/"Raising" rather than "relaxing": for a maximum,
                                    relaxing means moving the number up, which is worth saying
                                    outright instead of leaving the reader to work out. *@
@@ -213,17 +342,17 @@
                                     <text>Widening the <strong>@nutrient.Name</strong> target by &plusmn;@step</text>
                                 }
 
-                                @* Below a cent, "approximately $0.00" would read as "this target is
+                                @* Below a cent, "approximately ৳0.00" would read as "this target is
                                    free" when it is only cheap. *@
                                 @if (price.SavingPerTonne < 0.005m)
                                 {
-                                    <text>would save less than <strong>$0.01 per tonne</strong>.</text>
+                                    <text>would save less than <strong>৳0.01 per tonne</strong>.</text>
                                 }
                                 else
                                 {
                                     <text>
                                         would save approximately
-                                        <strong>$@price.SavingPerTonne.ToString("F2") per tonne</strong>.
+                                        <strong>৳@price.SavingPerTonne.ToString("F2") per tonne</strong>.
                                     </text>
                                 }
                             </li>
@@ -247,9 +376,9 @@
             *@
             @if (Model.ReducedCosts.Count > 0)
             {
-                <h5 class="mt-4">Ingredient Economics &mdash; Why Each Limit Holds</h5>
+                <h5>Ingredient Economics &mdash; Why Each Limit Holds</h5>
 
-                <ul class="mb-2">
+                <ul class="fc-notes">
                     @* Driven by the ingredient list, so these read in the same order as the mix. *@
                     @foreach (var ingredient in Model.Ingredients)
                     {
@@ -258,16 +387,22 @@
                             continue;
                         }
 
-                        // Composed in C# rather than inline: "$0.90/kg" is fine, but keeping every
+                        // Composed in C# rather than inline: "৳0.90/kg" is fine, but keeping every
                         // figure in one place is what stops a stray @ from being read as an email
                         // address further down the sentence.
-                        var priceLabel = "$" + economics.CostPerUnit.ToString("F2") + "/kg";
-                        var gapLabel = "$" + economics.PerKg.ToString("F4") + "/kg";
-                        var breakEvenLabel = "$" + economics.BreakEvenCost.ToString("F4") + "/kg";
+                        var priceLabel = "৳" + economics.CostPerUnit.ToString("F2") + "/kg";
+                        var gapLabel = "৳" + economics.PerKg.ToString("F4") + "/kg";
+                        var breakEvenLabel = "৳" + economics.BreakEvenCost.ToString("F4") + "/kg";
                         var minLabel = (ingredient.MinInclusionPct ?? 0).ToString("0.##") + "%";
                         var maxLabel = (ingredient.MaxInclusionPct ?? 100).ToString("0.##") + "%";
 
-                        <li>
+                        // Held in by a minimum or held down by a maximum are both an ingredient
+                        // pinned against its own inclusion bound — the same phenomenon the flag
+                        // marker means everywhere else on this ticket. Priced out is not: nothing is
+                        // holding it, the mix simply declined it, so that note stays steel.
+                        var pinnedByLimit = economics.Verdict != InclusionVerdict.PricedOut;
+
+                        <li class="@(pinnedByLimit ? "fc-note fc-note-bind" : "fc-note")">
                             @if (economics.Verdict == InclusionVerdict.PricedOut)
                             {
                                 <text>
@@ -315,12 +450,13 @@
                     what they cost.
                 </p>
             }
+            </div>
         </div>
     }
     else if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert alert-danger">
             <h4>Error</h4>
-            <p>@Model.ErrorMessage</p>
+            <p class="mb-0">@Model.ErrorMessage</p>
         </div>
     }

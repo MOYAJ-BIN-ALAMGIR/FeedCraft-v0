@@ -91,7 +91,9 @@ function addIngredientRow(el) {
     html +=
         '<td class="incl-min-cell"><input name="' + item + '.MinInclusionPct" class="form-control" type="number" step="0.1" placeholder="0" /></td>' +
         '<td class="incl-max-cell"><input name="' + item + '.MaxInclusionPct" class="form-control" type="number" step="0.1" placeholder="100" value="100" /></td>' +
-        '<td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>';
+        // Must stay identical to the server-rendered button in _FormulationInputs.cshtml, or a row
+        // added after load looks different from the rows that were already there.
+        '<td><button type="button" class="btn btn-outline-danger btn-sm fc-rm" onclick="removeRow(this)" aria-label="Remove ingredient">&times;</button></td>';
 
     row.innerHTML = html;
 }
@@ -117,7 +119,8 @@ function addNutrient(el) {
         '<td>' + hidden(con + '.NutrientDefinitionId', newId) +
             '<input name="' + con + '.MinValue" class="form-control" type="number" step="0.01" /></td>' +
         '<td><input name="' + con + '.MaxValue" class="form-control" type="number" step="0.01" /></td>' +
-        '<td><button type="button" class="btn btn-danger btn-sm" onclick="removeNutrient(this)">X</button></td>';
+        // Same requirement as the ingredient row's remove button: identical to the Razor version.
+        '<td><button type="button" class="btn btn-outline-danger btn-sm fc-rm" onclick="removeNutrient(this)" aria-label="Remove nutrient">&times;</button></td>';
 
     // New header column, inserted before the inclusion-limit headers.
     var th = document.createElement('th');

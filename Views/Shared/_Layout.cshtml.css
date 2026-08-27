@@ -1,48 +1,16 @@
-﻿/* Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification
-for details on configuring this project to bundle and minify static web assets. */
+/* Scoped to Views/Shared/_Layout.cshtml.
+   This file is bundled into FeedCraft.Web.styles.css, which _Layout.cshtml links *after*
+   site.css — so anything declared here beats the design system rather than the other way round.
+   Keep it to rules that genuinely belong to the layout's own markup and cannot live in site.css.
 
+   The project template's leftovers (a blue link colour, a blue .btn-primary, .nav-pills, a
+   .box-shadow helper, and a .footer pinned with position:absolute) were all removed: they were
+   unreachable overrides of the palette, and the absolute footer has been replaced by the flex
+   column in site.css. */
+
+/* A long brand string should wrap rather than push the nav off the band. */
 a.navbar-brand {
   white-space: normal;
   text-align: center;
   word-break: break-all;
-}
-
-a {
-  color: #0077cc;
-}
-
-.btn-primary {
-  color: #fff;
-  background-color: #1b6ec2;
-  border-color: #1861ac;
-}
-
-.nav-pills .nav-link.active, .nav-pills .show > .nav-link {
-  color: #fff;
-  background-color: #1b6ec2;
-  border-color: #1861ac;
-}
-
-.border-top {
-  border-top: 1px solid #e5e5e5;
-}
-.border-bottom {
-  border-bottom: 1px solid #e5e5e5;
-}
-
-.box-shadow {
-  box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .05);
-}
-
-button.accept-policy {
-  font-size: 1rem;
-  line-height: inherit;
-}
-
-.footer {
-  position: absolute;
-  bottom: 0;
-  width: 100%;
-  white-space: nowrap;
-  line-height: 60px;
 }

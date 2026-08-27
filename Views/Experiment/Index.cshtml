@@ -41,7 +41,7 @@
                         {
                             <text>
                                 Panel <strong>@cheaper</strong> is cheaper by
-                                <strong>$@absPerKg.ToString("F4") per kg</strong>
+                                <strong>৳@absPerKg.ToString("F4") per kg</strong>
                                 (@absPct.ToString("F1")%).
                             </text>
                         }
@@ -65,20 +65,20 @@
                         <div class="col-md-4">
                             <div class="border rounded p-2 h-100">
                                 <div class="text-muted small">Panel A</div>
-                                <div class="fs-5">$@d.CostA.ToString("F2")</div>
+                                <div class="fs-5">৳@d.CostA.ToString("F2")</div>
                                 <div class="text-muted small">
                                     @d.BatchSizeA.ToString("0.##") kg &middot;
-                                    $@d.CostPerKgA.ToString("F4")/kg
+                                    ৳@d.CostPerKgA.ToString("F4")/kg
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="border rounded p-2 h-100">
                                 <div class="text-muted small">Panel B</div>
-                                <div class="fs-5">$@d.CostB.ToString("F2")</div>
+                                <div class="fs-5">৳@d.CostB.ToString("F2")</div>
                                 <div class="text-muted small">
                                     @d.BatchSizeB.ToString("0.##") kg &middot;
-                                    $@d.CostPerKgB.ToString("F4")/kg
+                                    ৳@d.CostPerKgB.ToString("F4")/kg
                                 </div>
                             </div>
                         </div>
@@ -86,10 +86,10 @@
                             <div class="border rounded p-2 h-100">
                                 <div class="text-muted small">Difference (B &minus; A)</div>
                                 <div class="fs-5 @(d.CostDelta < 0 ? "text-success" : d.CostDelta > 0 ? "text-danger" : "")">
-                                    @(d.CostDelta < 0 ? "-" : d.CostDelta > 0 ? "+" : "")$@absTotal.ToString("F2")
+                                    @(d.CostDelta < 0 ? "-" : d.CostDelta > 0 ? "+" : "")৳@absTotal.ToString("F2")
                                 </div>
                                 <div class="text-muted small">
-                                    @(d.CostPerKgDelta < 0 ? "-" : d.CostPerKgDelta > 0 ? "+" : "")$@absPerKg.ToString("F4")/kg
+                                    @(d.CostPerKgDelta < 0 ? "-" : d.CostPerKgDelta > 0 ? "+" : "")৳@absPerKg.ToString("F4")/kg
                                     &middot; @d.ChangedCount ingredient@(d.ChangedCount == 1 ? "" : "s") moved
                                 </div>
                             </div>

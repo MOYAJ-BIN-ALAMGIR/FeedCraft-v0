@@ -1,4 +1,14 @@
-﻿<!DOCTYPE html>
+@{
+    // The active-page marker. RouteData is the only thing that knows which controller rendered
+    // this layout, so the nav can mark itself without every action having to set a ViewData flag.
+    var currentController = ViewContext.RouteData.Values["controller"] as string;
+    Func<string, bool> isActive = name => string.Equals(currentController, name, StringComparison.OrdinalIgnoreCase);
+    Func<string, string> navClass = name => isActive(name) ? "nav-link active" : "nav-link";
+    // Nullable, deliberately: a null attribute value makes the tag helper omit aria-current
+    // entirely, which is what a non-current link should render.
+    Func<string, string?> navCurrent = name => isActive(name) ? "page" : null;
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -11,9 +21,11 @@
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        @* data-bs-theme="dark" is what flips Bootstrap's own toggler icon and collapse chrome for
+           the ink band; the colours themselves come from .fc-topbar in site.css. *@
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm fc-topbar" data-bs-theme="dark">
             <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Feed" asp-action="Index">FeedCraft</a>
+                <a class="navbar-brand fc-brand" asp-area="" asp-controller="Feed" asp-action="Index">FeedCraft</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
@@ -21,19 +33,21 @@
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Feed" asp-action="Index">Home</a>
+                            @* Named for what it does. The default route lands here, so this is also the
+                               landing link. *@
+                            <a class="@navClass("Feed")" aria-current="@navCurrent("Feed")" asp-area="" asp-controller="Feed" asp-action="Index">Formulate</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Ingredients" asp-action="Index">Ingredient Library</a>
+                            <a class="@navClass("Ingredients")" aria-current="@navCurrent("Ingredients")" asp-area="" asp-controller="Ingredients" asp-action="Index">Ingredient Library</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Knowledge" asp-action="Index">Knowledge Base</a>
+                            <a class="@navClass("Knowledge")" aria-current="@navCurrent("Knowledge")" asp-area="" asp-controller="Knowledge" asp-action="Index">Knowledge Base</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Experiment" asp-action="Index">Experiment</a>
+                            <a class="@navClass("Experiment")" aria-current="@navCurrent("Experiment")" asp-area="" asp-controller="Experiment" asp-action="Index">Experiment</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Market" asp-action="Index">Market</a>
+                            <a class="@navClass("Market")" aria-current="@navCurrent("Market")" asp-area="" asp-controller="Market" asp-action="Index">Market</a>
                         </li>
                         @* Dealers only. The link is hidden for everyone else, but the real
                            enforcement is [Authorize(Roles = ...)] on ListingsController — this
@@ -41,27 +55,24 @@
                         @if (User.IsInRole(FeedCraftDbContext.DealerRole))
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Listings" asp-action="Index">My Listings</a>
+                                <a class="@navClass("Listings")" aria-current="@navCurrent("Listings")" asp-area="" asp-controller="Listings" asp-action="Index">My Listings</a>
                             </li>
                         }
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
                     </ul>
                     <partial name="_LoginPartial" />
                 </div>
             </div>
         </nav>
     </header>
-    <div class="container">
+    <div class="container fc-page">
         <main role="main" class="pb-3">
             @RenderBody()
         </main>
     </div>
 
-    <footer class="border-top footer text-muted">
+    <footer class="fc-footer">
         <div class="container">
-            &copy; 2026 - FeedCraft - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            &copy; 2026 - FeedCraft
         </div>
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>

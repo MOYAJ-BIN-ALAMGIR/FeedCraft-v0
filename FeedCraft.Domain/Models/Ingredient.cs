@@ -9,8 +9,14 @@ namespace FeedCraft.Domain.Models
         public int Id { get; set; }
 
         [Required(ErrorMessage = "Ingredient name is required.")]
+        [StringLength(100, ErrorMessage = "Ingredient name cannot exceed 100 characters.")]
         public string Name { get; set; } = string.Empty;
 
+        // A cost of 0 is legitimate (a free byproduct); a negative one is not. Without this the
+        // solver treats a negative price as a reward and buys as much of the ingredient as its
+        // inclusion limit allows. Range's double overload validates a decimal property correctly —
+        // same pattern as DealerListing.Price.
+        [Range(0.0, 1000000.0, ErrorMessage = "Cost per unit must be 0 or greater.")]
         public decimal CostPerUnit { get; set; }
 
         /// <summary>

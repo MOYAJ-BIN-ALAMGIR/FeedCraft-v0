@@ -28,6 +28,9 @@
             <h5 class="mb-0">Best Value Per Nutrient</h5>
         </div>
         <div class="card-body">
+            @* Four columns, the last of which lists every ingredient, so this is the widest table
+               on the page after the ingredient grid. Wrapped for the same reason that one is. *@
+            <div class="table-responsive">
             <table class="table table-bordered table-sm mb-2">
                 <thead>
                     <tr>
@@ -41,7 +44,7 @@
                     @foreach (var ranking in rankings)
                     {
                         @* Composed in C#: Razor reads "@" between word characters as an email
-                           address and would emit "44%@$0.35" verbatim. *@
+                           address and would emit "44%@৳0.35" verbatim. *@
                         var unitLabel = ranking.Unit == "%" ? "%" : " " + ranking.Unit;
                         var cheapest = ranking.Cheapest;
 
@@ -60,11 +63,11 @@
                             else
                             {
                                 var supply = cheapest.NutrientContent.ToString("0.##") + unitLabel
-                                    + " at $" + cheapest.CostPerUnit.ToString("F2") + "/kg";
+                                    + " at ৳" + cheapest.CostPerUnit.ToString("F2") + "/kg";
 
                                 @* Sub-cent nutrient prices are real — energy costs a few cents
                                    per 1,000 kcal — so two decimals would round that whole row to
-                                   $0.00. Decided once per row off the cheapest source, which is
+                                   ৳0.00. Decided once per row off the cheapest source, which is
                                    also the smallest number in it, so the row reads consistently. *@
                                 var digits = cheapest.CostPerNutrientUnit >= 0.10 ? "F2" : "F4";
 
@@ -72,12 +75,12 @@
                                     <strong>@cheapest.IngredientName</strong><br />
                                     <span class="text-muted small">@supply</span>
                                 </td>
-                                <td>$@cheapest.CostPerNutrientUnit.ToString(digits) <span class="text-muted">per @ranking.Basis</span></td>
+                                <td><span class="fc-num">৳@cheapest.CostPerNutrientUnit.ToString(digits)</span> <span class="text-muted">per @ranking.Basis</span></td>
                                 <td class="small">
                                     @for (var i = 0; i < ranking.Sources.Count; i++)
                                     {
                                         var source = ranking.Sources[i];
-                                        var entry = source.IngredientName + " $"
+                                        var entry = source.IngredientName + " ৳"
                                             + source.CostPerNutrientUnit.ToString(digits);
 
                                         if (i > 0)
@@ -107,11 +110,12 @@
                     }
                 </tbody>
             </table>
+            </div>
 
             <p class="text-muted small mb-0">
                 Each figure is the ingredient's price divided by how much of the nutrient a kilogram
-                of it carries &mdash; so a 44% protein meal at $0.35/kg sells protein at $0.80 per kg,
-                while an 8.5% grain at $0.20/kg sells it at $2.35. Nutrients measured in absolute
+                of it carries &mdash; so a 44% protein meal at ৳0.35/kg sells protein at ৳0.80 per kg,
+                while an 8.5% grain at ৳0.20/kg sells it at ৳2.35. Nutrients measured in absolute
                 units are quoted per 1,000 of them, as energy conventionally is.
                 <br />
                 This ranks the raw materials, not the mix: the cheapest source of one nutrient can

@@ -9,7 +9,18 @@
 }
 
 <div class="container mt-4">
-    <h2 class="mb-4">Least-Cost Feed Formulation</h2>
+    @* The eyebrow is what tells you which section you are in once the nav band has scrolled off,
+       and the lede states the one thing this page does. Both are structure rather than
+       decoration — the h2 alone said "formulation" without saying what you get back. *@
+    <div class="fc-pagehead">
+        <div class="fc-eyebrow">Formulate</div>
+        <h2>Least-Cost Feed Formulation</h2>
+        <p class="fc-lede">
+            Set the batch size, the ingredients you can buy and the nutrient targets you have to
+            hit. The solver returns the cheapest mix that meets every one of them, and tells you
+            which targets are holding the price up.
+        </p>
+    </div>
 
     @if (TempData["LibraryMessage"] is string libraryMessage)
     {
@@ -37,9 +48,14 @@
        so it posts nothing and stays readable before anything has been solved. *@
     <partial name="_NutrientValueLeaderboard" model="Model" />
 
-    @* A sibling of #feedForm, never nested inside it — nested forms are invalid HTML and
-       the inner one is silently dropped by the browser. *@
-    <form asp-action="Load" method="get" class="card mb-4">
+    @* A plain card, deliberately not a <form>: Delete has to POST an antiforgery token, and a
+       GET form emits none, so a single shared form could not carry both actions. One small form
+       per row solves that without any JavaScript. Load stays a GET link, so /Feed/Load/3 remains
+       bookmarkable.
+
+       The id is what the print stylesheet hides this by — a <form> would have been hidden
+       automatically, and this is no longer one. *@
+    <div id="saved-formulations" class="card mb-4">
         <div class="card-header">
             <h5 class="mb-0">Saved Formulations</h5>
         </div>
@@ -53,22 +69,44 @@
             }
             else
             {
-                <div class="row g-2 align-items-center">
-                    <div class="col-sm-6">
-                        <select name="id" class="form-select" aria-label="Saved formulation">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Saved</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
                             @foreach (var item in savedFormulations)
                             {
-                                <option value="@item.Id">@item.Name &mdash; @item.CreatedAt.ToString("g")</option>
+                                <tr>
+                                    <td>@item.Name</td>
+                                    <td class="text-muted fc-num">@item.CreatedAt.ToString("g")</td>
+                                    <td class="text-nowrap text-end">
+                                        <a asp-action="Load" asp-route-id="@item.Id"
+                                           class="btn btn-sm btn-outline-secondary">Load</a>
+                                        <form asp-action="Delete" asp-route-id="@item.Id" method="post" class="d-inline">
+                                            @* The name is deliberately not interpolated into the
+                                               confirm text: save names are free text, and an
+                                               apostrophe in one would terminate the JS string
+                                               early. The row beside the button already says which
+                                               formulation this is. *@
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                    onclick="return confirm('Delete this saved formulation? This cannot be undone.');">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
                             }
-                        </select>
-                    </div>
-                    <div class="col-sm-3">
-                        <button type="submit" class="btn btn-outline-secondary">Load Formulation</button>
-                    </div>
+                        </tbody>
+                    </table>
                 </div>
             }
         </div>
-    </form>
+    </div>
 
     <form asp-action="Calculate" method="post" id="feedForm">
 
@@ -141,7 +179,7 @@
                     <div class="col-sm-4">
                         @* formaction/formmethod retarget this one button at Save, so the live
                            form state and its antiforgery token are reused as-is. *@
-                        <button type="submit" class="btn btn-outline-success"
+                        <button type="submit" class="btn btn-outline-primary"
                                 formaction="@Url.Action("Save")" formmethod="post">
                             Save Formulation
                         </button>
@@ -154,18 +192,24 @@
             </div>
         </div>
 
-        <button type="submit" class="btn btn-success btn-lg">Calculate Least Cost Mix</button>
+        @* One row, two actions, one of them clearly the point of the page. Calculate is the commit
+           action and takes the filled primary; CSV is the same solve delivered as a file, so it is
+           outlined rather than a second green button competing with it. *@
+        <div class="fc-actions">
+            <button type="submit" class="btn btn-primary btn-lg">Calculate Least Cost Mix</button>
 
-        @* Solves the form and sends the answer back as a file instead of a page, reusing this
-           form's state and antiforgery token exactly as the two buttons above do.
+            @* Solves the form and sends the answer back as a file instead of a page, reusing this
+               form's state and antiforgery token exactly as the two buttons above do.
 
-           It belongs here rather than in _FormulationResults, even though that is where the
-           results it exports are shown: that partial is shared with /Experiment, where it renders
-           *inside* #experimentForm, and a nested form would be silently dropped by the browser. *@
-        <button type="submit" class="btn btn-outline-secondary btn-lg"
-                formaction="@Url.Action("DownloadCsv")" formmethod="post">
-            Download CSV
-        </button>
+               It belongs here rather than in _FormulationResults, even though that is where the
+               results it exports are shown: that partial is shared with /Experiment, where it
+               renders *inside* #experimentForm, and a nested form would be silently dropped by the
+               browser. *@
+            <button type="submit" class="btn btn-outline-secondary btn-lg"
+                    formaction="@Url.Action("DownloadCsv")" formmethod="post">
+                Download CSV
+            </button>
+        </div>
     </form>
 </div>
 

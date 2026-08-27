@@ -203,6 +203,36 @@ namespace FeedCraft.Web.Controllers
         }
 
         /// <summary>
+        /// Removes a saved snapshot from the library.
+        ///
+        /// A POST, because it changes state — the picker renders one small form per row so this can
+        /// carry an antiforgery token, which the GET-based Load form above cannot.
+        ///
+        /// No Include is needed: a SavedFormulation is a single row holding two JSON columns, with
+        /// no dependent rows to cascade. Nothing else references it either — /Experiment resolves a
+        /// snapshot by id at request time and already says "Pick a saved formulation to load into
+        /// this panel" when the id no longer resolves.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Delete(int id)
+        {
+            var saved = _db.SavedFormulations.FirstOrDefault(s => s.Id == id);
+
+            if (saved == null)
+            {
+                return NotFound();
+            }
+
+            var name = saved.Name;
+            _db.SavedFormulations.Remove(saved);
+            _db.SaveChanges();
+
+            TempData["LibraryMessage"] = $"Deleted saved formulation \"{name}\".";
+            return RedirectToAction(nameof(Index));
+        }
+
+        /// <summary>
         /// Copies a knowledge-base entry's nutrient targets into the constraint fields of the
         /// form the user is currently editing.
         ///

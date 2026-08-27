@@ -85,7 +85,14 @@
 
                                 <td class="incl-min-cell"><input asp-for="Ingredients[i].MinInclusionPct" class="form-control" step="0.1" placeholder="0" /></td>
                                 <td class="incl-max-cell"><input asp-for="Ingredients[i].MaxInclusionPct" class="form-control" step="0.1" placeholder="100" /></td>
-                                <td><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>
+                                @* Outlined rather than filled: a solid red button per row would make
+                                   deleting look like the main thing you do here. The label is a glyph
+                                   because this grid is already the widest thing on the page, so the
+                                   accessible name is carried by aria-label instead.
+
+                                   This markup is duplicated in wwwroot/js/formulation-panel.js for
+                                   rows added after load — change both or the two diverge. *@
+                                <td><button type="button" class="btn btn-outline-danger btn-sm fc-rm" onclick="removeRow(this)" aria-label="Remove ingredient">&times;</button></td>
                             </tr>
                         }
                     </tbody>
@@ -143,7 +150,9 @@
                                     <input asp-for="Constraints[k].MinValue" class="form-control" step="0.01" />
                                 </td>
                                 <td><input asp-for="Constraints[k].MaxValue" class="form-control" step="0.01" /></td>
-                                <td><button type="button" class="btn btn-danger btn-sm" onclick="removeNutrient(this)">X</button></td>
+                                @* Same treatment and the same duplication caveat as the ingredient
+                                   grid's remove button above. *@
+                                <td><button type="button" class="btn btn-outline-danger btn-sm fc-rm" onclick="removeNutrient(this)" aria-label="Remove nutrient">&times;</button></td>
                             </tr>
                         }
                     </tbody>

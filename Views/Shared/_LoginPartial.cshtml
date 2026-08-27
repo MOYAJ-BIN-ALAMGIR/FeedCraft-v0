@@ -1,17 +1,24 @@
 @inject SignInManager<IdentityUser> SignInManager
 
 @* Right-hand side of the navbar. The enclosing collapse div uses justify-content-between,
-   so this <ul> sits opposite the main nav links. *@
+   so this <ul> sits opposite the main nav links.
+
+   Nothing here carries text-dark any more: the band is ink, and .fc-topbar in site.css sets the
+   link colour for everything inside it — including the logout <button>, which is why that button
+   needs no colour class of its own. *@
 
 <ul class="navbar-nav">
     @if (SignInManager.IsSignedIn(User))
     {
         <li class="nav-item">
-            <span class="nav-link text-dark">
+            <span class="navbar-text fc-identity">
                 @User.Identity?.Name
                 @if (User.IsInRole(FeedCraftDbContext.DealerRole))
                 {
-                    <span class="badge bg-success ms-1">Dealer</span>
+                    @* An outlined stamp rather than a coloured badge. A filled chip here would be
+                       the third place the accent gets spent, and the accent is worth more than
+                       that. *@
+                    <span class="fc-role">Dealer</span>
                 }
             </span>
         </li>
@@ -19,17 +26,17 @@
             @* A form, not a link: signing out changes state, so it goes over POST with an
                antiforgery token. *@
             <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
-                <button type="submit" class="btn btn-link nav-link text-dark">Log out</button>
+                <button type="submit" class="btn btn-link nav-link">Log out</button>
             </form>
         </li>
     }
     else
     {
         <li class="nav-item">
-            <a class="nav-link text-dark" asp-controller="Account" asp-action="Register">Register</a>
+            <a class="nav-link" asp-controller="Account" asp-action="Register">Register</a>
         </li>
         <li class="nav-item">
-            <a class="nav-link text-dark" asp-controller="Account" asp-action="Login">Log in</a>
+            <a class="nav-link" asp-controller="Account" asp-action="Login">Log in</a>
         </li>
     }
 </ul>

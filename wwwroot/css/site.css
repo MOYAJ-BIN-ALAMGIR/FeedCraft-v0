@@ -1,33 +1,969 @@
-html {
-  font-size: 14px;
+/*
+  FeedCraft's visual system — "mill instrument panel".
+
+  The palette and type are taken from the subject's own world rather than chosen for contrast:
+  the dark enamel green of painted mill equipment, galvanised steel, maize, and the brick red
+  that marks a limit. Bahnschrift is Microsoft's DIN, the typeface of machinery plates and
+  weighing scales, so it carries the right register without a download; Cascadia Mono sets every
+  number in the app, which is what makes a column of kg and ৳ figures readable as a column.
+
+  Nothing here is fetched from the network. Every face named below was confirmed installed on the
+  demo machine, because the room it is presented in may not have internet.
+
+  Structure of this file:
+    1. Tokens
+    2. Bootstrap 5.3 variable overrides   (cheaper and safer than fighting compiled classes)
+    3. Document shell — the ink band, the page, the footer
+    4. Typography
+    5. Components — cards, tables, forms, buttons, alerts, badges, lists
+    6. The batch ticket — the solved result, and the one moment of motion
+    7. Focus
+    8. @media print — the batch sheet
+*/
+
+/* ---------------------------------------------------------------- 1. Tokens ---- */
+
+:root {
+  /* Six palette values. --fc-maize is the only accent and is spent in exactly two places:
+     the brand mark and the composition bar. */
+  --fc-ink: #14201C;      /* silo shadow — a green-black, not a neutral black */
+  --fc-mill: #1F4636;     /* painted equipment enamel */
+  --fc-maize: #E8B23A;
+  --fc-paper: #F4F6F3;    /* cool and faintly green; deliberately not cream */
+  --fc-steel: #7E8F87;    /* galvanising. 3.2:1 on white, so: hairlines and borders only */
+  --fc-flag: #A4342A;     /* a binding limit, an infeasible model, a destructive button */
+
+  /* Derived. --fc-muted is the readable version of --fc-steel (5.8:1 on white) and is what
+     muted *text* uses; --fc-steel must never carry a word. */
+  --fc-muted: #55655E;
+  --fc-slack: #3E7D6A;
+  --fc-hairline: #D9E0DC;
+  --fc-text: #1E2A26;
+
+  /* Type roles. */
+  --fc-display: "Bahnschrift SemiCondensed", "Bahnschrift", "Franklin Gothic Medium", "Segoe UI", sans-serif;
+  --fc-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --fc-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  /* U+09F3 exists in neither Bahnschrift nor Cascadia Mono, so the browser falls back per-glyph.
+     That is invisible at body size and obvious at 52px, where the symbol lands on a different
+     baseline at a different weight to the digits beside it. Naming the fallback ourselves is the
+     only way to control it. */
+  --fc-currency: "Nirmala UI", "Segoe UI", sans-serif;
+
+  /* The composition bar's six stops, cycled by :nth-child so no row needs an inline colour or a
+     per-ingredient attribute. Ordered for adjacent contrast rather than as a ramp: neighbouring
+     segments are what a reader has to tell apart. Kept inside the palette's own family — this is
+     where --fc-maize is spent, and it is the only place besides the brand mark.
+
+     Stop 3 is deliberately not --fc-steel. Steel is the hairline and the hatch colour, so a
+     55%-of-batch segment painted in it read as empty space rather than as the largest ingredient in
+     the mix. Galvanised blue-grey is the same material world and cannot be mistaken for a border. */
+  --fc-seg-1: #E8B23A;
+  --fc-seg-2: #1F4636;
+  --fc-seg-3: #5E7F8F;
+  --fc-seg-4: #C98A2E;
+  --fc-seg-5: #3E7D6A;
+  --fc-seg-6: #4A5A54;
 }
 
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
+/* ------------------------------------- 2. Bootstrap variable overrides ---- */
+
+/* Same selector and specificity as Bootstrap's own root block, and this file loads after it. */
+:root,
+[data-bs-theme="light"] {
+  --bs-body-font-family: var(--fc-body);
+  --bs-body-color: var(--fc-text);
+  --bs-body-color-rgb: 30, 42, 38;
+  --bs-body-bg: var(--fc-paper);
+  --bs-body-bg-rgb: 244, 246, 243;
+  --bs-emphasis-color: var(--fc-ink);
+  --bs-secondary-color: var(--fc-muted);
+  --bs-heading-color: var(--fc-ink);
+
+  /* .text-primary / .bg-primary / .border-primary and the badge utilities all read these.
+     .btn-primary does not — it reads its own --bs-btn-* locals, handled in section 5. */
+  --bs-primary: #1f4636;
+  --bs-primary-rgb: 31, 70, 54;
+  --bs-secondary-rgb: 126, 143, 135;
+  --bs-success-rgb: 62, 125, 106;
+  --bs-danger-rgb: 164, 52, 42;
+  --bs-warning-rgb: 232, 178, 58;
+  --bs-info-rgb: 46, 107, 99;
+
+  --bs-border-color: var(--fc-hairline);
+  --bs-border-color-translucent: var(--fc-hairline);
+
+  /* Small, machined — but not zero. A zero-radius hairline grid is its own cliché. */
+  --bs-border-radius: 3px;
+  --bs-border-radius-sm: 2px;
+  --bs-border-radius-lg: 4px;
+  --bs-border-radius-xl: 6px;
+
+  --bs-link-color: #1f4636;
+  --bs-link-color-rgb: 31, 70, 54;
+  --bs-link-hover-color: #0f2a20;
+  --bs-link-hover-color-rgb: 15, 42, 32;
+
+  --bs-focus-ring-color: rgba(31, 70, 54, 0.2);
+}
+
+/* ------------------------------------------------- 3. Document shell ---- */
+
+html {
+  font-size: 16px;
+}
+
+/* Flex column instead of the template's absolute footer plus a 60px body margin: the footer
+   sits after the content when there is a lot of it and at the bottom of the viewport when
+   there is not, without either rule. */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: var(--fc-body);
+  background: var(--fc-paper);
+  color: var(--fc-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.fc-page {
+  flex: 1 1 auto;
+}
+
+/* Every page opens the same way: what section this is, what the page is called, and one sentence
+   on what it does. The eyebrow is not decoration — it is the only thing that tells you where you
+   are once the nav has scrolled off. */
+.fc-pagehead {
+  margin-bottom: 2rem;
+}
+
+.fc-pagehead > h1,
+.fc-pagehead > h2 {
+  margin: 0.3rem 0 0;
+}
+
+.fc-lede {
+  max-width: 62ch;
+  margin: 0.7rem 0 0;
+  color: var(--fc-muted);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+/* The ink band. data-bs-theme="dark" on the <nav> is what flips Bootstrap's own toggler icon
+   and collapse colours; everything visible is set here. */
+.fc-topbar {
+  background: var(--fc-ink);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  margin-bottom: 2rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.fc-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--fc-display);
+  font-size: 1.1875rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #fff;
+  text-decoration: none;
+  padding: 0.35rem 0;
+}
+
+.fc-brand:hover,
+.fc-brand:focus {
+  color: #fff;
+}
+
+/* A painted stripe, the way a maker's mark sits on a piece of mill plant. */
+.fc-brand::before {
+  content: "";
+  width: 0.5rem;
+  height: 1.4rem;
+  background: var(--fc-maize);
+  flex: 0 0 auto;
+}
+
+.fc-topbar .nav-link {
+  font-family: var(--fc-display);
+  font-size: 0.9375rem;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0.55rem 0.85rem;
+  border-bottom: 3px solid transparent;
+}
+
+.fc-topbar .nav-link:hover {
+  color: #fff;
+}
+
+.fc-topbar .nav-link.active {
+  color: #fff;
+  border-bottom-color: var(--fc-maize);
+}
+
+.fc-topbar .navbar-text {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.875rem;
+}
+
+/* The signed-in account. An address is data, so it takes the data face. */
+.fc-identity {
+  font-family: var(--fc-mono);
+  font-size: 0.8125rem;
+}
+
+/* A stamped role marker: outline only, so it costs no colour. */
+.fc-role {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 2px;
+  font-family: var(--fc-display);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+/* .btn-link inside the band would otherwise arrive underlined and mill-green. The colour is
+   already handled by the .fc-topbar .nav-link rule above, which outranks .btn's own local. */
+.fc-topbar .btn-link {
+  text-decoration: none;
+  border: 0;
+}
+
+.fc-footer {
+  margin-top: 3.5rem;
+  padding: 1.25rem 0;
+  background: var(--fc-ink);
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--fc-display);
+  font-size: 0.8125rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------- 4. Typography ---- */
+
+h1,
+h2,
+h3 {
+  font-family: var(--fc-display);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.14;
+  color: var(--fc-ink);
+}
+
+h1 {
+  font-size: 2.25rem;
+}
+
+h2 {
+  font-size: 1.875rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+}
+
+/* Section heads are structural, so they take the label treatment rather than being small
+   headlines. */
+h4,
+h5,
+h6 {
+  font-family: var(--fc-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fc-ink);
+}
+
+h4 {
+  font-size: 1.0625rem;
+}
+
+h5 {
+  font-size: 0.9375rem;
+}
+
+h6 {
+  font-size: 0.8125rem;
+}
+
+/* The smallest structural label: a table's subject, a figure's unit, a state. */
+.fc-eyebrow {
+  font-family: var(--fc-display);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fc-muted);
+}
+
+/* Any figure, anywhere. tabular-nums is the point: a column of costs must line up on the
+   decimal whether or not the digits happen to be the same width. */
+.fc-num {
+  font-family: var(--fc-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.fc-cur {
+  font-family: var(--fc-currency);
+}
+
+/* ---------------------------------------------------- 5. Components ---- */
+
+.card {
+  --bs-card-bg: #fff;
+  --bs-card-border-color: var(--fc-hairline);
+  --bs-card-cap-bg: #fff;
+  --bs-card-spacer-y: 1.15rem;
+  --bs-card-spacer-x: 1.25rem;
+  box-shadow: 0 1px 2px rgba(20, 32, 28, 0.05);
+}
+
+.card-header {
+  border-bottom: 1px solid var(--fc-hairline);
+  font-family: var(--fc-display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--fc-ink);
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--fc-hairline);
+  --bs-table-hover-bg: rgba(31, 70, 54, 0.045);
+}
+
+/* Stripes are replaced by hairlines. A striped table reads as a spreadsheet; a ruled one reads
+   as a printed sheet, which is what this app produces. */
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  --bs-table-bg-type: transparent;
+}
+
+.table > thead > tr > th {
+  font-family: var(--fc-display);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--fc-muted);
+  background: var(--fc-paper);
+  border-bottom: 1px solid var(--fc-steel);
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+/* Column one is what the row is about; every column after it is a measurement. Set as a table
+   rule rather than a per-cell class so the dynamically generated ingredient rows inherit it
+   without formulation-panel.js needing to know. */
+.fc-tabular > thead > tr > th:not(:first-child),
+.fc-tabular > tbody > tr > td:not(:first-child),
+.fc-tabular > tfoot > tr > td:not(:first-child) {
+  text-align: right;
+}
+
+.fc-tabular > tbody > tr > td:not(:first-child),
+.fc-tabular > tfoot > tr > td:not(:first-child) {
+  font-family: var(--fc-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9375rem;
+}
+
+/* Opt-out for a cell that holds prose rather than a measurement. The child chain is repeated
+   deliberately: the rule above scores one class plus :not(:first-child) plus three elements, so a
+   flat `.fc-tabular td.fc-text` ties on classes and loses on elements — the headroom column came
+   out right-aligned in Cascadia Mono. */
+.fc-tabular > tbody > tr > td.fc-text,
+.fc-tabular > tfoot > tr > td.fc-text {
+  font-family: var(--fc-body);
+  font-size: 1rem;
+  text-align: left;
+}
+
+label,
+.form-label,
+.col-form-label {
+  font-family: var(--fc-display);
+  font-weight: 600;
+  color: var(--fc-ink);
+}
+
+/* Numeric inputs are data entry, so they get the data face — which also makes a wide grid of
+   them scannable down the column. */
+input[type="number"] {
+  font-family: var(--fc-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.form-control,
+.form-select {
+  border-color: var(--fc-hairline);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--fc-mill);
+  box-shadow: 0 0 0 0.2rem rgba(31, 70, 54, 0.15);
+}
+
+.form-check-input:checked {
+  background-color: var(--fc-mill);
+  border-color: var(--fc-mill);
+}
+
+.form-check-input:focus {
+  border-color: var(--fc-mill);
+  box-shadow: 0 0 0 0.2rem rgba(31, 70, 54, 0.15);
+}
+
+.btn {
+  --bs-btn-font-family: var(--fc-display);
+  --bs-btn-font-weight: 600;
+  --bs-btn-padding-y: 0.48rem;
+  --bs-btn-padding-x: 1.05rem;
+  --bs-btn-focus-shadow-rgb: 31, 70, 54;
+  letter-spacing: 0.03em;
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--fc-mill);
+  --bs-btn-border-color: var(--fc-mill);
+  --bs-btn-hover-bg: #163427;
+  --bs-btn-hover-border-color: #163427;
+  --bs-btn-active-bg: #102620;
+  --bs-btn-active-border-color: #102620;
+  --bs-btn-disabled-bg: #8fa69b;
+  --bs-btn-disabled-border-color: #8fa69b;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--fc-mill);
+  --bs-btn-border-color: var(--fc-mill);
+  --bs-btn-hover-bg: var(--fc-mill);
+  --bs-btn-hover-border-color: var(--fc-mill);
+  --bs-btn-active-bg: #163427;
+  --bs-btn-active-border-color: #163427;
+}
+
+/* "Success" is used throughout this app for the *commit* action — Calculate, Save, Publish, Solve
+   Both — rather than for a state. So it resolves to the same mill green as .btn-primary: a second,
+   competing green would say there are two kinds of go. */
+.btn-success {
+  --bs-btn-bg: var(--fc-mill);
+  --bs-btn-border-color: var(--fc-mill);
+  --bs-btn-hover-bg: #163427;
+  --bs-btn-hover-border-color: #163427;
+  --bs-btn-active-bg: #102620;
+  --bs-btn-active-border-color: #102620;
+  --bs-btn-disabled-bg: #8fa69b;
+  --bs-btn-disabled-border-color: #8fa69b;
+}
+
+.btn-outline-success {
+  --bs-btn-color: var(--fc-mill);
+  --bs-btn-border-color: var(--fc-mill);
+  --bs-btn-hover-bg: var(--fc-mill);
+  --bs-btn-hover-border-color: var(--fc-mill);
+  --bs-btn-active-bg: #163427;
+  --bs-btn-active-border-color: #163427;
+}
+
+/* The quiet option: Back, Load, Download. A hairline border and muted text, so it reads as
+   available rather than as an alternative to the primary action beside it. */
+.btn-outline-secondary {
+  --bs-btn-color: var(--fc-muted);
+  --bs-btn-border-color: var(--fc-hairline);
+  --bs-btn-hover-color: var(--fc-ink);
+  --bs-btn-hover-bg: var(--fc-paper);
+  --bs-btn-hover-border-color: var(--fc-steel);
+  --bs-btn-active-color: var(--fc-ink);
+  --bs-btn-active-bg: #e8ece9;
+  --bs-btn-active-border-color: var(--fc-steel);
+}
+
+.btn-danger {
+  --bs-btn-bg: var(--fc-flag);
+  --bs-btn-border-color: var(--fc-flag);
+  --bs-btn-hover-bg: #8b2b22;
+  --bs-btn-hover-border-color: #8b2b22;
+  --bs-btn-active-bg: #79251e;
+  --bs-btn-active-border-color: #79251e;
+}
+
+.btn-outline-danger {
+  --bs-btn-color: var(--fc-flag);
+  --bs-btn-border-color: var(--fc-flag);
+  --bs-btn-hover-bg: var(--fc-flag);
+  --bs-btn-hover-border-color: var(--fc-flag);
+  /* The active pair is not redundant with hover: Bootstrap keeps its own #dc3545 there, so
+     press-and-hold flashed the stock red on a button that is flag red the rest of the time. */
+  --bs-btn-active-bg: #8b2b22;
+  --bs-btn-active-border-color: #8b2b22;
+}
+
+.btn-link {
+  --bs-btn-color: var(--fc-mill);
+  --bs-btn-hover-color: #0f2a20;
+  letter-spacing: 0;
+}
+
+/* The remove control on a grid row. The default formulation carries nine of these across the two
+   grids, and nine solid red buttons would make deletion the loudest thing on a form whose subject is
+   arithmetic. Outlined and muted, it is available without shouting — and it still turns flag red on
+   hover, which is when the warning is actually wanted.
+
+   Declared after .btn-outline-danger so its own --bs-btn-color wins the tie. */
+.fc-rm {
+  --bs-btn-padding-x: 0.5rem;
+  --bs-btn-padding-y: 0.2rem;
+  --bs-btn-color: var(--fc-muted);
+  --bs-btn-border-color: var(--fc-hairline);
+  font-family: var(--fc-body);
+  font-size: 0.9375rem;
+  line-height: 1.2;
+}
+
+/* MVC adds .validation-summary-errors only when there is something to report, so styling that
+   class rather than the wrapper means an empty summary stays invisible instead of rendering as an
+   empty box. The text colour is left to .text-danger on the wrapper, which is a Bootstrap utility
+   and therefore !important. */
+.validation-summary-errors {
+  border: 1px solid var(--fc-hairline);
+  border-left: 3px solid var(--fc-flag);
+  background: #fff;
+  padding: 0.8rem 1rem;
+}
+
+.validation-summary-errors ul {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+/* An action bar: the primary action first, the alternatives beside it at the same baseline. */
+.fc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Alerts stop being coloured boxes and become marked notes: white, hairline, and a 3px edge in
+   the variant's colour. That is the same marker vocabulary the binding-constraint rows use, so
+   "this is flagged" reads consistently across the app. */
+.alert {
+  --bs-alert-bg: #fff;
+  --bs-alert-border-color: var(--fc-hairline);
+  --bs-alert-color: var(--fc-text);
+  border-left: 3px solid var(--fc-steel);
+}
+
+.alert-info {
+  border-left-color: var(--fc-mill);
+}
+
+.alert-secondary {
+  --bs-alert-bg: var(--fc-paper);
+  border-left-color: var(--fc-steel);
+}
+
+.alert-warning {
+  border-left-color: var(--fc-maize);
+}
+
+.alert-danger {
+  --bs-alert-color: #5e1e17;
+  border-left-color: var(--fc-flag);
+}
+
+.alert-success {
+  border-left-color: var(--fc-mill);
+}
+
+.alert > h4,
+.alert > h5 {
+  margin-bottom: 0.6rem;
+}
+
+.badge {
+  font-family: var(--fc-display);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  padding: 0.36em 0.52em;
+  vertical-align: middle;
+}
+
+.list-group-item {
+  border-color: var(--fc-hairline);
+}
+
+.list-group-item-action:hover,
+.list-group-item-action:focus {
+  background: rgba(31, 70, 54, 0.04);
+}
+
+/* ------------------------------------------------ 6. The batch ticket ---- */
+
+/*
+  A feed mill's output is a batch ticket: the order at the top, the mix in the middle, the assay at
+  the bottom. The app already prints exactly that, so the results surface becomes the ticket it was
+  already trying to be — three zones, in the order a reader needs them.
+
+    .fc-ticket-head      ink band     what this is, and that it solved
+    .fc-ticket-readout   paper        the four figures and the composition bar
+    .fc-ticket-body      white        the mix, the assay, and what the binding targets cost
+
+  The wrapper keeps `alert alert-success`, which occurs nowhere else in the app: the class carries
+  the print rules and the ARIA role, and re-pointing it here costs nothing elsewhere.
+*/
+.fc-ticket {
+  /* The zones supply their own padding, so the alert's is zeroed rather than fought. */
+  --bs-alert-padding-x: 0;
+  --bs-alert-padding-y: 0;
+  border: 1px solid var(--fc-hairline);
+  border-radius: var(--bs-border-radius);
+  background: #fff;
+  margin-bottom: 2rem;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(20, 32, 28, 0.05);
+
+  /* The ticket also renders inside the two /Experiment panels, at roughly half this width. An
+     inline-size container lets it answer for its own layout there instead of the viewport
+     answering for it — the figures reflow and the hero figure steps down, in a panel and on a
+     phone alike, from one rule. */
+  container-type: inline-size;
+}
+
+.fc-ticket-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.5rem;
+  background: var(--fc-ink);
+}
+
+/* Still a heading, set as an eyebrow: it labels the band rather than competing with the figure
+   underneath it. */
+.fc-ticket-title {
+  margin: 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  color: #fff;
+}
+
+/* The same stamped-marker vocabulary as .fc-role in the nav band: outline only, so a state costs
+   no colour. The celebration is the bar, two lines down. */
+.fc-stamp {
+  padding: 0.12rem 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 2px;
+  font-family: var(--fc-display);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.fc-ticket-readout {
+  padding: 1.5rem 1.5rem 1.35rem;
+  background: var(--fc-paper);
+  border-bottom: 1px solid var(--fc-hairline);
+}
+
+.fc-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  row-gap: 1.25rem;
+}
+
+.fc-figure {
+  padding-right: 2rem;
+}
+
+.fc-figure + .fc-figure {
+  padding-left: 2rem;
+  border-left: 1px solid var(--fc-hairline);
+}
+
+.fc-figure-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--fc-ink);
+}
+
+.fc-figure-hero .fc-figure-value {
+  font-size: 3.25rem;
+}
+
+.fc-figure-label {
+  margin-top: 0.45rem;
+  font-family: var(--fc-display);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fc-muted);
+}
+
+/* U+09F3 comes from a different family than the digits beside it (see --fc-currency), which is
+   invisible at body size and obvious at 52px. Sized and nudged here so the two sit on one
+   baseline. */
+.fc-figure-value .fc-cur {
+  font-size: 0.62em;
+  padding-right: 0.05em;
+  vertical-align: 0.07em;
+}
+
+/*
+  The composition bar. Segment widths are each ingredient's % of batch, as flex-basis — no canvas,
+  no library, nothing fetched.
+
+  Real segments shrink (flex-shrink: 1) so the fixed-width ticks below can take their few pixels
+  out of the total proportionally rather than overflowing the bar; min-width keeps a trace
+  ingredient from disappearing entirely.
+*/
+.fc-mixbar {
+  display: flex;
+  height: 30px;
+  margin-top: 1.5rem;
+  background: #fff;
+  border: 1px solid var(--fc-hairline);
+  overflow: hidden;
+}
+
+.fc-seg {
+  flex: 0 1 auto;
+  min-width: 2px;
+  background-color: var(--fc-seg-color);
+  transform-origin: left center;
+}
+
+/* An ingredient the solver priced out to zero does not silently vanish: "this was available and
+   the LP rejected it" is a result, so it keeps its place as a hatched tick with its name still in
+   the key. Selector carries the parent so it outranks the :nth-child cycle below. */
+.fc-mixbar > .fc-seg-out {
+  flex: 0 0 5px;
+  min-width: 0;
+  background-color: transparent;
+  background-image: repeating-linear-gradient(45deg,
+      var(--fc-steel) 0 2px, transparent 2px 4px);
+}
+
+.fc-mixkey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  font-size: 0.8125rem;
+}
+
+.fc-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.fc-swatch {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  background-color: var(--fc-seg-color);
+}
+
+.fc-key-out {
+  color: var(--fc-muted);
+}
+
+.fc-mixkey > .fc-key-out > .fc-swatch {
+  background-color: transparent;
+  background-image: repeating-linear-gradient(45deg,
+      var(--fc-steel) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--fc-hairline);
+}
+
+/* One cycle of six, resolved into a variable rather than into two sets of colour rules, so the bar
+   and its key stay in step by construction. Both lists are written from the same collection in the
+   same order, so a given ingredient is the same :nth-child in each. */
+.fc-mixbar > *:nth-child(6n + 1),
+.fc-mixkey > *:nth-child(6n + 1) { --fc-seg-color: var(--fc-seg-1); }
+
+.fc-mixbar > *:nth-child(6n + 2),
+.fc-mixkey > *:nth-child(6n + 2) { --fc-seg-color: var(--fc-seg-2); }
+
+.fc-mixbar > *:nth-child(6n + 3),
+.fc-mixkey > *:nth-child(6n + 3) { --fc-seg-color: var(--fc-seg-3); }
+
+.fc-mixbar > *:nth-child(6n + 4),
+.fc-mixkey > *:nth-child(6n + 4) { --fc-seg-color: var(--fc-seg-4); }
+
+.fc-mixbar > *:nth-child(6n + 5),
+.fc-mixkey > *:nth-child(6n + 5) { --fc-seg-color: var(--fc-seg-5); }
+
+.fc-mixbar > *:nth-child(6n + 6),
+.fc-mixkey > *:nth-child(6n + 6) { --fc-seg-color: var(--fc-seg-6); }
+
+.fc-ticket-body {
+  padding: 1.35rem 1.5rem 1.5rem;
+}
+
+/* The existing section headings become the sheet's rules. No new element: the h5s were already
+   there, and mt-4 was removed from them so this owns the spacing. */
+.fc-ticket-body > h5 {
+  margin: 1.85rem 0 0.8rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--fc-hairline);
+}
+
+.fc-ticket-body > h5:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/*
+  The binding marker — the quiet half of the signature, and the one an examiner should notice.
+
+  A row is marked when the solved level is sitting on a bound, which is precisely the set of rows
+  the sensitivity table below is about. Same 3px flag edge in both tables, so "these rows are
+  pinned, and that is what those prices are the price of" reads without being written down.
+
+  Tinting a Bootstrap 5.3 row means setting --bs-table-bg-type: the cells paint their background
+  through an inset box-shadow that a plain background-color cannot reach. Selector specificity is
+  matched to the .table-striped reset in section 5 and placed after it.
+*/
+.table > tbody > tr.fc-bind > td {
+  --bs-table-bg-type: rgba(164, 52, 42, 0.05);
+}
+
+/* On the first cell only. In border-collapse the wider border wins the shared edge, so 3px here
+   beats table-bordered's 1px without !important. */
+.table > tbody > tr.fc-bind > td:first-child {
+  border-left: 3px solid var(--fc-flag);
+}
+
+/* A stamped state, borrowing its colour from the text so one rule covers every variant. */
+.fc-chip {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-family: var(--fc-display);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fc-chip-bind {
+  color: var(--fc-flag);
+}
+
+/* The relaxation and ingredient-economics findings. Each is a statement about one bound, so each
+   gets its own note with the same left-edge marker the pinned table rows use — flag where
+   something is held against a bound, steel where it is merely reported. */
+.fc-notes {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.fc-note {
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 0.4rem;
+  background: var(--fc-paper);
+  border-left: 3px solid var(--fc-steel);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.fc-note-bind {
+  border-left-color: var(--fc-flag);
+}
+
+/*
+  Motion — the one moment. Both the collapsed start state and the transition are gated behind
+  classes that only site.js adds, so with JavaScript off, or under reduced motion, the bar renders
+  at full width on the first paint. Nothing else in the app animates.
+*/
+.fc-mixbar.fc-reveal > .fc-seg {
+  transform: scaleX(0);
+}
+
+.fc-mixbar.fc-reveal-in > .fc-seg {
+  transform: scaleX(1);
+  transition: transform 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* site.js already checks matchMedia and skips both effects. This is the belt to that braces:
+     if the preference changes mid-session, the bar is still whole. */
+  .fc-mixbar > .fc-seg {
+    transform: none !important;
+    transition: none !important;
   }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+/* Narrow — a phone, or either /Experiment panel on a desktop. Keyed to the ticket's own width, not
+   the viewport's, so both cases are answered once. */
+@container (max-width: 620px) {
+  .fc-figure-hero .fc-figure-value {
+    font-size: 2.25rem;
+  }
+
+  .fc-figure,
+  .fc-figure + .fc-figure {
+    flex: 0 0 50%;
+    padding: 0 1rem 0 0;
+    border-left: 0;
+  }
+
+  .fc-ticket-head,
+  .fc-ticket-readout,
+  .fc-ticket-body {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 }
 
-html {
-  position: relative;
-  min-height: 100%;
+/* --------------------------------------------------------- 7. Focus ---- */
+
+/* :focus-visible rather than :focus, so a mouse click does not leave a ring behind. Ink on the
+   light surfaces, maize on the ink band — a maize ring on white is only 1.9:1 and would not be
+   a visible indicator at all. */
+:focus-visible {
+  outline: 2px solid var(--fc-ink);
+  outline-offset: 2px;
 }
 
-body {
-  margin-bottom: 60px;
-}
-
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-  color: var(--bs-secondary-color);
-  text-align: end;
-}
-
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-  text-align: start;
+.fc-topbar :focus-visible,
+.fc-footer :focus-visible {
+  outline-color: var(--fc-maize);
 }
 
 /*
@@ -36,10 +972,14 @@ body {
   Screen rendering is untouched: every rule below is inside @media print.
 
   Everything that exists to *produce* the answer is dropped: site chrome, the input form, the
-  saved-formulation and template pickers, and the ingredient price comparison. Every <form> in
-  the app is an editor or a picker, so hiding them wholesale is safe — the only ones inside a
-  results table are the inline Delete buttons on the library pages, which have no business on
-  paper either.
+  saved-formulation and template pickers, and the ingredient price comparison. Hiding every
+  <form> covers most of that, because a form in this app is always an editor or a picker — the
+  only ones inside a results table are the inline Delete buttons on the library pages, which have
+  no business on paper either.
+
+  The saved-formulation list is the exception and has to be named explicitly: it is a table of
+  rows with a small Delete form in each, not one form wrapping the lot, so the `form` rule hides
+  its buttons but leaves the list itself on the page.
 */
 @media print {
   @page {
@@ -51,6 +991,7 @@ body {
   footer,
   form,
   .btn,
+  #saved-formulations,
   #nutrient-value-leaderboard,
   .alert-info,
   .alert-secondary {
@@ -58,8 +999,10 @@ body {
   }
 
   body {
-    /* The 60px reserves room for the fixed footer, which is gone here. */
-    margin-bottom: 0;
+    /* On screen the body is a flex column so the footer can sit at the bottom of a short page.
+       Both the footer and the reason for the flex context are gone here. */
+    display: block;
+    min-height: 0;
     font-size: 11pt;
     color: #000;
     background: none;
@@ -96,6 +1039,88 @@ body {
     margin-bottom: 0 !important;
   }
 
+  /*
+    ...except when that box is the batch ticket, which is the sheet. Its outline is redrawn dark and
+    kept: a ruled box is what tells a mill floor where the ticket ends. Everything above uses
+    !important, so these have to as well.
+  */
+  .fc-ticket {
+    border: 1px solid #333 !important;
+    box-shadow: none !important;
+    /* Containment is a screen-layout device; on paper the ticket is simply the page. */
+    container-type: normal !important;
+    /* On screen this clips the segment ends to the ticket's radius. On paper it is the last
+       thing that could quietly amputate a wide mix table, so it goes with the wrapper below. */
+    overflow: visible !important;
+  }
+
+  .fc-ticket-head,
+  .fc-ticket-readout {
+    background: none !important;
+    border-bottom: 1px solid #333 !important;
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  .fc-ticket-body {
+    padding: 0.5rem !important;
+  }
+
+  .fc-ticket-title,
+  .fc-figure-value {
+    color: #000 !important;
+  }
+
+  .fc-stamp {
+    color: #000 !important;
+    border-color: #333 !important;
+  }
+
+  /* 52pt of ink for one number is a poster, not a ticket. */
+  .fc-figure-hero .fc-figure-value {
+    font-size: 20pt;
+  }
+
+  .fc-figure-value {
+    font-size: 12pt;
+  }
+
+  .fc-ticket-body > h5 {
+    border-top-color: #333 !important;
+    margin-top: 0.9rem;
+    padding-top: 0.6rem;
+  }
+
+  /* The composition bar and its key are information, not decoration, so they earn their ink —
+     the same exception the table borders above are granted. */
+  .fc-mixbar,
+  .fc-mixbar > .fc-seg,
+  .fc-swatch {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .fc-mixbar {
+    border-color: #333 !important;
+    height: 20px;
+  }
+
+  /* A note's left edge is the marker that says which bound is holding the price up. Redrawn dark
+     rather than dropped; the paper tint goes. */
+  .fc-note {
+    background: none !important;
+    border-left: 3px solid #333 !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  .fc-chip {
+    border-color: #333 !important;
+    color: #000 !important;
+  }
+
+  .table > tbody > tr.fc-bind > td:first-child {
+    border-left: 3px solid #000 !important;
+  }
+
   /* Bootstrap's table borders and stripes are set in currency the printer would rather drop.
      Borders are redrawn dark and stripes removed, then print-color-adjust stops the browser
      helpfully discarding them again. */
@@ -113,6 +1138,13 @@ body {
     /* A mix table split across two sheets is a mis-read batch waiting to happen. */
     page-break-inside: avoid;
     width: 100%;
+  }
+
+  /* On screen this wrapper is what lets a table too wide for its card be scrolled to; on paper
+     there is nothing to scroll, so the clip it sets up would silently amputate the right-hand
+     columns instead. Paper is wider than a phone anyway, so opting out costs nothing. */
+  .table-responsive {
+    overflow: visible !important;
   }
 
   /* Muted greys are unreadable at print contrast; the units and footnotes they carry are not
