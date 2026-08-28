@@ -1,0 +1,224 @@
+@using System.Globalization
+@{
+    ViewData["Title"] = "Home";
+
+    // The worked example below is regression case 1 — the broiler-starter formulation the database
+    // seeds, exactly as the solver returns it at a 1000 kg batch. It is written here rather than
+    // solved on request so the front page has no dependency on the optimizer or the database: a
+    // failure in either should not be able to take down the page that explains what the app is.
+    //
+    // The trade is that these figures can drift away from the solver if the seed data ever changes,
+    // so they live in this one block and nowhere else in the file, and every one of them is checked
+    // against a live solve of the same formulation whenever this page is touched.
+    //
+    // Formatting mirrors _FormulationResults exactly, which is the point: this specimen has to be
+    // the same artefact the app produces, not a picture of one. Percentages are formatted twice
+    // from a single value — invariant for the CSS flex-basis, "F2" for the key the reader sees —
+    // because a culture that writes 42,24 would hand CSS a length it silently discards.
+    var totalCostText = "231.03";
+    var costPerKgText = "0.2310";
+    var batchText = "1000";
+    var usedText = "3 / 4";
+
+    double pctMaize = 42.2414;
+    double pctSoy = 2.1552;
+    double pctMustard = 55.6034;
+}
+
+<div class="container mt-4">
+
+    @*
+        The hero states the thesis rather than repeating the wordmark — that is already in the band
+        forty pixels above. What an examiner needs first is what this program computes.
+    *@
+    <div class="fc-hero">
+        <div class="fc-eyebrow">Least-cost feed formulation</div>
+        <h1>The cheapest mix that meets every target.</h1>
+        <p class="fc-lede">
+            FeedCraft states a ration as a linear program &mdash; ingredient prices as the objective,
+            nutrient requirements as the constraints &mdash; and solves it exactly, so the mix it
+            returns is the cheapest one that exists, not the best one found by trial. Then it reads
+            the solution back: which requirements are holding the price up, and what one more unit of
+            each is worth.
+        </p>
+        <div class="fc-actions">
+            <a class="btn btn-primary" asp-area="" asp-controller="Feed" asp-action="Index">Start formulating</a>
+            <a class="btn btn-outline-secondary" asp-area="" asp-controller="Knowledge" asp-action="Index">Browse the knowledge base</a>
+        </div>
+    </div>
+
+    @*
+        The specimen. Deliberately the app's own batch ticket, class for class, so the front page
+        shows the real output vocabulary instead of a hero invented for the occasion. site.js already
+        selects .fc-mixbar and [data-fc-countup] on every page, so the count-up and the staggered bar
+        reveal arrive here with no new script — the same single moment of motion a real solve gets.
+    *@
+    <figure class="fc-specimen">
+        <div class="fc-ticket">
+            <div class="fc-ticket-head">
+                <h2 class="fc-ticket-title">Worked example</h2>
+                <span class="fc-stamp">Broiler starter</span>
+            </div>
+
+            <div class="fc-ticket-readout">
+                <div class="fc-figures">
+                    <div class="fc-figure fc-figure-hero">
+                        <div class="fc-figure-value fc-num" data-fc-countup="@totalCostText">
+                            <span class="fc-cur">৳</span><span data-fc-countup-out>@totalCostText</span>
+                        </div>
+                        <div class="fc-figure-label">Total cost</div>
+                    </div>
+                    <div class="fc-figure">
+                        <div class="fc-figure-value fc-num">
+                            <span class="fc-cur">৳</span>@costPerKgText
+                        </div>
+                        <div class="fc-figure-label">Per kg</div>
+                    </div>
+                    <div class="fc-figure">
+                        <div class="fc-figure-value fc-num">@batchText</div>
+                        <div class="fc-figure-label">Batch, kg</div>
+                    </div>
+                    <div class="fc-figure">
+                        <div class="fc-figure-value fc-num">@usedText</div>
+                        <div class="fc-figure-label">Ingredients used</div>
+                    </div>
+                </div>
+
+                @* aria-hidden for the same reason it is on the real ticket: the key below states
+                   every name and figure in it as text, so announcing four empty divs would only add
+                   noise. The fourth segment is the hatched tick an ingredient the solver priced out
+                   to zero keeps — "this was available and the LP rejected it" is a result. *@
+                <div class="fc-mixbar" aria-hidden="true">
+                    <div class="fc-seg" style="flex-basis: @pctMaize.ToString("0.####", CultureInfo.InvariantCulture)%"></div>
+                    <div class="fc-seg" style="flex-basis: @pctSoy.ToString("0.####", CultureInfo.InvariantCulture)%"></div>
+                    <div class="fc-seg" style="flex-basis: @pctMustard.ToString("0.####", CultureInfo.InvariantCulture)%"></div>
+                    <div class="fc-seg fc-seg-out"></div>
+                </div>
+
+                <ul class="fc-mixkey">
+                    <li class="fc-key">
+                        <span class="fc-swatch"></span>
+                        Maize
+                        <span class="fc-num">@pctMaize.ToString("F2")%</span>
+                    </li>
+                    <li class="fc-key">
+                        <span class="fc-swatch"></span>
+                        Soybean Meal
+                        <span class="fc-num">@pctSoy.ToString("F2")%</span>
+                    </li>
+                    <li class="fc-key">
+                        <span class="fc-swatch"></span>
+                        Mustard Meal
+                        <span class="fc-num">@pctMustard.ToString("F2")%</span>
+                    </li>
+                    <li class="fc-key fc-key-out">
+                        <span class="fc-swatch"></span>
+                        Vegetable Oil
+                        <span class="fc-num">0.00%</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="fc-ticket-body">
+                <h5>What's driving the cost</h5>
+                @* The quiet half of the signature, and the part worth noticing: two of the five
+                   nutrient targets are sitting on their bounds, and the dual solution prices them.
+                   Same flag edge the pinned rows carry on the results page. *@
+                <ul class="fc-notes mb-0">
+                    <li class="fc-note fc-note-bind">
+                        <strong>Crude Protein</strong> is pinned at its maximum,
+                        <span class="fc-num">24.00</span>% &mdash; worth
+                        <span class="fc-num">৳2.59</span> per tonne, per 1%.
+                    </li>
+                    <li class="fc-note fc-note-bind">
+                        <strong>Lysine</strong> is pinned at its minimum,
+                        <span class="fc-num">1.00</span>% &mdash; worth
+                        <span class="fc-num">৳94.83</span> per tonne, per 1%.
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <figcaption class="fc-specimen-note">
+            The example formulation the app ships with, as the solver returns it. Open it to change
+            any price or target and solve again.
+        </figcaption>
+    </figure>
+
+    @*
+        The hub. An eyebrow-set h2 so the heading order stays readable while the label keeps the
+        smallest structural treatment — this is a signpost, not a second headline.
+    *@
+    <div class="fc-sections">
+        <h2 class="fc-eyebrow">Sections</h2>
+
+        <div class="row g-3">
+            @* Formulate leads because it is what the app is for. It is marked with the mill-green
+               edge rather than made larger: --fc-maize is spent on the brand mark and the
+               composition bar, and a third place would stop it meaning anything. *@
+            <div class="col-sm-6 col-lg-4">
+                <a class="fc-tile fc-tile-lead h-100" asp-area="" asp-controller="Feed" asp-action="Index">
+                    <h3 class="fc-tile-title">Formulate</h3>
+                    <p class="fc-tile-note">
+                        Set the batch size, the prices you can buy at and the nutrient targets you
+                        have to hit, then solve.
+                    </p>
+                </a>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <a class="fc-tile h-100" asp-area="" asp-controller="Ingredients" asp-action="Index">
+                    <h3 class="fc-tile-title">Ingredient Library</h3>
+                    <p class="fc-tile-note">
+                        The ingredients and nutrients a formulation starts from, with their prices
+                        and composition.
+                    </p>
+                </a>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <a class="fc-tile h-100" asp-area="" asp-controller="Knowledge" asp-action="Index">
+                    <h3 class="fc-tile-title">Knowledge Base</h3>
+                    <p class="fc-tile-note">
+                        Published feeding specifications by species and stage, ready to load onto a
+                        formulation as its targets.
+                    </p>
+                </a>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <a class="fc-tile h-100" asp-area="" asp-controller="Experiment" asp-action="Index">
+                    <h3 class="fc-tile-title">Experiment</h3>
+                    <p class="fc-tile-note">
+                        Solve two formulations side by side and see what the difference between them
+                        costs.
+                    </p>
+                </a>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <a class="fc-tile h-100" asp-area="" asp-controller="Market" asp-action="Index">
+                    <h3 class="fc-tile-title">Market</h3>
+                    <p class="fc-tile-note">
+                        What dealers are asking for each ingredient, searchable and sorted by price.
+                    </p>
+                </a>
+            </div>
+            @* Dealers only, on the same check the nav band uses. Presentation, not security —
+               ListingsController carries [Authorize(Roles = ...)]. *@
+            @if (User.IsInRole(FeedCraftDbContext.DealerRole))
+            {
+                <div class="col-sm-6 col-lg-4">
+                    <a class="fc-tile h-100" asp-area="" asp-controller="Listings" asp-action="Index">
+                        <h3 class="fc-tile-title">My Listings</h3>
+                        <p class="fc-tile-note">
+                            The ingredients you sell and the prices buyers see on the market page.
+                        </p>
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+
+    <p class="fc-note">
+        FeedCraft is a final-year Computer Science &amp; Engineering project.
+        <a asp-area="" asp-controller="Home" asp-action="About">Read about the project and the two of us</a>.
+    </p>
+
+</div>

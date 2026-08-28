@@ -74,9 +74,12 @@ app.UseAuthorization();
 
 app.MapStaticAssets();
 
+// The bare "/" lands on the landing page, not on the form. /Feed is still the working surface and
+// nothing about it changed — this only decides what an examiner sees first. /Error resolves through
+// this same route to ErrorController, which is what UseExceptionHandler above is pointed at.
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Feed}/{action=Index}/{id?}")
+    pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
 

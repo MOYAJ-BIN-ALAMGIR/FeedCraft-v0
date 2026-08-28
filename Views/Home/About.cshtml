@@ -1,0 +1,78 @@
+@{
+    ViewData["Title"] = "About Us";
+}
+
+<div class="container mt-4">
+
+    <div class="fc-pagehead">
+        <div class="fc-eyebrow">About</div>
+        <h2>About FeedCraft</h2>
+        <p class="fc-lede">
+            A least-cost feed formulation tool: it finds the cheapest mix of available ingredients
+            that satisfies every nutritional requirement, and reports which requirements are driving
+            that cost.
+        </p>
+    </div>
+
+    <div class="fc-prose">
+        <h3>Why we built it</h3>
+        <p>
+            FeedCraft began with a real request. Moyaj's brother, a nutritionist at a feed company,
+            was formulating rations by hand in a spreadsheet &mdash; a slow, ingredient-by-ingredient
+            process in which even a small improvement in cost per kilogram matters at industrial
+            batch sizes. He asked whether it could be automated properly.
+        </p>
+        <p>
+            FeedCraft is the answer: a solver that finds the guaranteed cheapest mix meeting every
+            nutritional requirement, and shows exactly which requirement is driving that cost.
+        </p>
+    </div>
+
+    <h3 class="mt-5 mb-3">The team</h3>
+
+    @* Two equal cards, no hierarchy between them. An address is data, so it takes the data face —
+       the same reasoning .fc-identity was written for in the nav band. *@
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h4 class="h5 mb-1">Mohiuddin Mahady</h4>
+                    <div class="fc-eyebrow">Computer Science &amp; Engineering</div>
+                    <p class="text-muted mt-1 mb-3">Mymensingh Engineering College</p>
+                    <p class="fc-identity mb-3">
+                        <a href="mailto:mohiuddinmahady@gmail.com">mohiuddinmahady@gmail.com</a>
+                    </p>
+                    <a class="btn btn-primary btn-sm"
+                       href="https://linkedin.com/in/mohiuddin-mahady"
+                       target="_blank" rel="noopener noreferrer">LinkedIn profile</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h4 class="h5 mb-1">Moyaj Bin Alamgir</h4>
+                    <div class="fc-eyebrow">Computer Science &amp; Engineering</div>
+                    <p class="text-muted mt-1 mb-3">Mymensingh Engineering College</p>
+                    <p class="fc-identity mb-3">
+                        <a href="mailto:moyaz2001@gmail.com">moyaz2001@gmail.com</a>
+                    </p>
+                    <a class="btn btn-primary btn-sm"
+                       href="https://www.linkedin.com/in/moyaj-bin-alamgir/"
+                       target="_blank" rel="noopener noreferrer">LinkedIn profile</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="fc-note mt-4">
+        Developed at the Department of Computer Science &amp; Engineering, Mymensingh Engineering
+        College.
+    </p>
+
+    <div class="fc-actions mt-4">
+        <a class="btn btn-primary" asp-area="" asp-controller="Feed" asp-action="Index">Start formulating</a>
+        <a class="btn btn-outline-secondary" asp-area="" asp-controller="Home" asp-action="Index">Back to the home page</a>
+    </div>
+
+</div>
