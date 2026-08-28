@@ -51,7 +51,23 @@
             </div>
         </div>
         <div class="col-lg-6">
-            <partial name="_FeasibleRegionDiagram" />
+            @* Supplied artwork, so the page adds no words to it: the legend, the axis labels and the
+               note are all inside the picture. Only the alt text is written here, and that is for a
+               reader who cannot see it.
+
+               width and height are the intrinsic size, so the browser reserves the box before the
+               file arrives and the column below does not jump. srcset goes through Url.Content by
+               hand — "~/" is expanded by UrlResolutionTagHelper, which only knows a fixed list of
+               attributes, and srcset is not on it. sizes tracks the column: 46vw lands within a few
+               pixels of col-lg-6 at every breakpoint above lg, and below lg the figure is
+               full width. *@
+            <figure class="fc-plate">
+                <img src="~/img/feasible-region-1536.jpg"
+                     srcset="@(Url.Content("~/img/feasible-region-768.jpg")) 768w, @(Url.Content("~/img/feasible-region-1536.jpg")) 1536w"
+                     sizes="(min-width: 992px) 46vw, 100vw"
+                     width="1536" height="1024"
+                     alt="A graph of maize percentage against soybean meal percentage. Straight lines mark the nutrient requirements and enclose a shaded triangle holding every mix that satisfies all of them. Dashed lines join mixes that cost the same, an arrow shows cost falling towards the bottom left, and a diamond marks the corner of the triangle where the cheapest mix sits." />
+            </figure>
         </div>
     </div>
 

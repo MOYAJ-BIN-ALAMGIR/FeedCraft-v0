@@ -1233,6 +1233,21 @@ h2.fc-ticket-title {
   line-height: 1.45;
 }
 
+/* A figure that is a supplied picture rather than something the page draws. It carries its own
+   background, a shade off the paper it sits on, so it takes the hairline and the radius the cards
+   use: that reads as a plate laid on the page instead of a pale rectangle bleeding into it. */
+.fc-plate {
+  margin: 0;
+}
+
+.fc-plate > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--fc-hairline);
+  border-radius: var(--bs-border-radius);
+}
+
 /* A full-measure image with its caption. Radius from Bootstrap's own token so it matches the cards
    it sits between. */
 .fc-band {

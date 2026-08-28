@@ -2,11 +2,18 @@
     // The active-page marker. RouteData is the only thing that knows which controller rendered
     // this layout, so the nav can mark itself without every action having to set a ViewData flag.
     var currentController = ViewContext.RouteData.Values["controller"] as string;
+    var currentAction = ViewContext.RouteData.Values["action"] as string;
     Func<string, bool> isActive = name => string.Equals(currentController, name, StringComparison.OrdinalIgnoreCase);
     Func<string, string> navClass = name => isActive(name) ? "nav-link active" : "nav-link";
     // Nullable, deliberately: a null attribute value makes the tag helper omit aria-current
     // entirely, which is what a non-current link should render.
     Func<string, string?> navCurrent = name => isActive(name) ? "page" : null;
+    // About shares the Home controller with the landing page (Home/Index), so — unlike the six
+    // controller-per-section links below — it cannot mark itself active by controller alone, or it
+    // would also light up on the landing page. It keys on the action instead.
+    var aboutActive = isActive("Home") && string.Equals(currentAction, "About", StringComparison.OrdinalIgnoreCase);
+    var aboutClass = aboutActive ? "nav-link active" : "nav-link";
+    string? aboutCurrent = aboutActive ? "page" : null;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -52,6 +59,11 @@
                         <li class="nav-item">
                             <a class="@navClass("Market")" aria-current="@navCurrent("Market")" asp-area="" asp-controller="Market" asp-action="Index">Market</a>
                         </li>
+                        @* Informational, not a working surface, so it sits after the six sections. It
+                           keys on the action, not the controller — see the aboutActive note above. *@
+                        <li class="nav-item">
+                            <a class="@aboutClass" aria-current="@aboutCurrent" asp-area="" asp-controller="Home" asp-action="About">About us</a>
+                        </li>
                         @* Dealers only. The link is hidden for everyone else, but the real
                            enforcement is [Authorize(Roles = ...)] on ListingsController — this
                            is presentation, not security. *@
@@ -74,8 +86,8 @@
     </div>
 
     <footer class="fc-footer">
-        @* The one place About is reachable from every page — it is not worth a slot in the nav band,
-           which is for the six working surfaces. *@
+        @* About is in the nav band now; keeping it in the footer as well is conventional and costs
+           nothing — a reader who has reached the bottom does not have to scroll back up for it. *@
         <div class="container fc-footer-inner">
             <span>&copy; @DateTime.Now.Year - FeedCraft</span>
             <span>Dept. of CSE, Mymensingh Engineering College</span>
