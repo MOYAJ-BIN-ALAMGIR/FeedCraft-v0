@@ -1,0 +1,151 @@
+@*
+    The feasible region of a two-ingredient ration, drawn flat. This is the one figure on the site
+    that shows what the solver is actually doing rather than what it returned, so it is worth being
+    exact about: the geometry below is a real linear program, not a sketch that resembles one.
+
+    Let x = maize %, y = soybean meal %. Three constraints:
+
+        2.1x +      y >=  72.5      a minimum  (steep line, left edge)
+        6x   +  17y   <= 490        a maximum  (shallow line, upper edge)      [y <= 28.82 - 0.353x]
+       -0.375x +   y  >= -1.75      a minimum  (rising line, lower-right edge)
+
+    Those three bound the triangle A(25, 20) - B(42, 14) - C(30, 9.5).
+
+    Cost = 1.725x + 2y, so the iso-cost lines have slope -0.8625 and soybean meal is dearer per
+    point than maize, which is true of the real ingredient library. That objective is chosen so its
+    gradient lies inside the normal cone at C -- it is the positive combination 1*(2.1, 1) +
+    1*(-0.375, 1) of the two constraints active there -- which makes C the unique minimiser:
+
+        cost(A) = 83.13     cost(B) = 100.45     cost(C) = 70.75   <-- the optimum
+
+    C is therefore a vertex of the feasible set, and the drawn iso-cost line through it is tangent
+    to the region. Both of those are the whole theorem the app rests on, and both are things an
+    examiner can check off the picture.
+
+    Screen mapping: x in 0..70 across px 44..464, y in 0..35 across py 314..14 (inverted). The
+    viewBox is a window onto that space, cropped just outside the ticks and the two arrow tips.
+
+    No numerals on the axes. This is a schematic -- putting "20" on an axis invites "20% of what,
+    measured how?", a question the figure cannot answer honestly. Tick marks give it the structure
+    of a chart without claiming to be data.
+
+    There is no type inside the drawing at all: every word belongs to the page. See the note on the
+    axis titles below for why.
+*@
+
+<figure class="fc-lp">
+    @* Axis titles are markup rather than <text> in the plot, for the same reason the key below is.
+       font-size inside an SVG resolves in user units, so it scales with the viewBox: one value that
+       sets 15px on a desktop renders 10px where this figure is 327px wide and 21px where a stacked
+       column makes it 672px, and neither is the size an axis title should be. Out here they set once,
+       in the page's own type, at a size that holds. Nothing is lost by moving them -- an axis title
+       only has to sit on the right side of the plot, it is not pinned to a tick. *@
+    <div class="fc-lp-frame">
+        <span class="fc-lp-axlabel fc-lp-axlabel-y">Soybean meal %</span>
+
+        <svg class="fc-lp-plot" viewBox="32 0 448 330" role="img" aria-labelledby="lpTitle lpDesc">
+            <title id="lpTitle">The feasible region of a two-ingredient ration</title>
+            <desc id="lpDesc">
+                A graph with maize percentage across the bottom and soybean meal percentage up the
+                side. Three straight lines, each one a nutrient requirement, enclose a shaded
+                triangle containing every mix that satisfies all of them. A family of parallel dashed
+                lines runs across the graph joining mixes of equal cost, and an arrow across them
+                shows cost falling towards the bottom left. The last dashed line to touch the
+                triangle meets it at a single corner, marked with a diamond: that corner is the
+                cheapest mix, and it is what the solver returns.
+            </desc>
+
+            @* Cost contours first, so the constraints and the region sit over them. *@
+            <g class="fc-lp-iso">
+                <line x1="44" y1="176.9" x2="155.3" y2="314" />
+                <line x1="44" y1="121.1" x2="200.5" y2="314" />
+                <line x1="44" y1="65.4" x2="245.7" y2="314" />
+                @* The tangent contour: the cheapest one that still touches the region, through C. *@
+                <line x1="46.6" y1="14" x2="290.1" y2="314" />
+            </g>
+
+            @* Which way cost falls. Perpendicular to the contours as they appear on screen rather
+               than in ration percentages: the axes are at different scales -- 6 px per maize point
+               against 8.57 per soybean point -- so the true gradient of 1.725x + 2y would sit 20
+               degrees off a right angle here and read as a slip. The direction is correct under
+               either reading; only the angle is a drawing decision. *@
+            <g class="fc-lp-arrow">
+                <line x1="132" y1="186" x2="104" y2="209" />
+                <path d="M 96 215.5 L 100.88 205.69 L 106.58 212.65 Z" />
+            </g>
+
+            @* The three requirements. Drawn full width so each reads as a constraint on the whole
+               plane rather than an edge that only exists where the triangle needs it. *@
+            <g class="fc-lp-constraint">
+                <line x1="151.1" y1="14" x2="251.1" y2="314" />
+                <line x1="44" y1="66.9" x2="464" y2="278.7" />
+                <line x1="72" y1="314" x2="464" y2="104" />
+            </g>
+
+            @* A - B - C. Every edge lies on one of the three lines above, by construction. *@
+            <path class="fc-lp-region" d="M 194 142.6 L 296 194 L 224 232.6 Z" />
+
+            @* C = (30, 9.5). The vertex the tangent contour touches. *@
+            <path class="fc-lp-optimum" d="M 224 223.1 L 233.5 232.6 L 224 242.1 L 214.5 232.6 Z" />
+
+            <g class="fc-lp-axis">
+                <path d="M 44 14 V 314 H 464" />
+                <path class="fc-lp-tip" d="M 44 7 L 40.5 16 L 47.5 16 Z" />
+                <path class="fc-lp-tip" d="M 471 314 L 462 310.5 L 462 317.5 Z" />
+                <line x1="164" y1="314" x2="164" y2="320" />
+                <line x1="284" y1="314" x2="284" y2="320" />
+                <line x1="404" y1="314" x2="404" y2="320" />
+                <line x1="44" y1="228.3" x2="38" y2="228.3" />
+                <line x1="44" y1="142.6" x2="38" y2="142.6" />
+                <line x1="44" y1="56.9" x2="38" y2="56.9" />
+            </g>
+        </svg>
+
+        <span class="fc-lp-axlabel fc-lp-axlabel-x">Maize %</span>
+    </div>
+
+    @* The key is markup rather than part of the drawing, for the same reason. The swatches are the
+       same strokes and fills the plot uses, at 12 units tall. Ordered the way the figure is built up
+       -- requirements, what they leave, what it costs, which way that falls, where it bottoms out --
+       so reading the key top to bottom is the argument in five lines. *@
+    <ul class="fc-lp-key">
+        <li>
+            <svg class="fc-lp-chip" viewBox="0 0 24 12" aria-hidden="true">
+                <line class="fc-lp-constraint" x1="1" y1="10" x2="23" y2="2" />
+            </svg>
+            <span>A nutrient requirement &mdash; protein, energy, lysine, calcium</span>
+        </li>
+        <li>
+            <svg class="fc-lp-chip" viewBox="0 0 24 12" aria-hidden="true">
+                <path class="fc-lp-region" d="M 2 10 L 6 2 L 22 3 L 18 10 Z" />
+            </svg>
+            <span>Every mix that meets all of them</span>
+        </li>
+        <li>
+            <svg class="fc-lp-chip" viewBox="0 0 24 12" aria-hidden="true">
+                <line class="fc-lp-iso" x1="1" y1="10" x2="23" y2="2" />
+            </svg>
+            <span>Mixes that cost the same</span>
+        </li>
+        <li>
+            <svg class="fc-lp-chip" viewBox="0 0 24 12" aria-hidden="true">
+                <g class="fc-lp-arrow">
+                    <line x1="21" y1="2" x2="9" y2="8.4" />
+                    <path d="M 4.5 10.7 L 7.75 6.16 L 10.09 10.58 Z" />
+                </g>
+            </svg>
+            <span>Cost falls this way</span>
+        </li>
+        <li>
+            <svg class="fc-lp-chip" viewBox="0 0 24 12" aria-hidden="true">
+                <path class="fc-lp-optimum" d="M 12 1 L 18 6 L 12 11 L 6 6 Z" />
+            </svg>
+            <span>The cheapest one in it &mdash; what FeedCraft returns</span>
+        </li>
+    </ul>
+
+    <figcaption class="fc-lp-note">
+        Two ingredients and three requirements, so it fits on a page. A real ration has dozens of
+        each, and the answer is still a single corner of the same shape.
+    </figcaption>
+</figure>

@@ -30,20 +30,28 @@
     @*
         The hero states the thesis rather than repeating the wordmark — that is already in the band
         forty pixels above. What an examiner needs first is what this program computes.
+
+        Two columns on a wide screen, stacked below lg. The lede is deliberately short: the diagram
+        beside it says "linear program" faster than a paragraph can, so the paragraph only has to
+        say what that buys you.
     *@
-    <div class="fc-hero">
-        <div class="fc-eyebrow">Least-cost feed formulation</div>
-        <h1>The cheapest mix that meets every target.</h1>
-        <p class="fc-lede">
-            FeedCraft states a ration as a linear program &mdash; ingredient prices as the objective,
-            nutrient requirements as the constraints &mdash; and solves it exactly, so the mix it
-            returns is the cheapest one that exists, not the best one found by trial. Then it reads
-            the solution back: which requirements are holding the price up, and what one more unit of
-            each is worth.
-        </p>
-        <div class="fc-actions">
-            <a class="btn btn-primary" asp-area="" asp-controller="Feed" asp-action="Index">Start formulating</a>
-            <a class="btn btn-outline-secondary" asp-area="" asp-controller="Knowledge" asp-action="Index">Browse the knowledge base</a>
+    <div class="fc-hero row g-4 g-lg-5 align-items-center">
+        <div class="col-lg-6">
+            <div class="fc-eyebrow">Least-cost feed formulation</div>
+            <h1>The cheapest mix that meets every target.</h1>
+            <p class="fc-lede">
+                FeedCraft states a ration as a linear program and solves it exactly, so the mix it
+                returns is the cheapest one that exists &mdash; not the best one found by trial. Then
+                it reads the solution back: which requirements are holding the price up, and what one
+                more unit of each is worth.
+            </p>
+            <div class="fc-actions">
+                <a class="btn btn-primary" asp-area="" asp-controller="Feed" asp-action="Index">Start formulating</a>
+                <a class="btn btn-outline-secondary" asp-area="" asp-controller="Knowledge" asp-action="Index">Browse the knowledge base</a>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <partial name="_FeasibleRegionDiagram" />
         </div>
     </div>
 

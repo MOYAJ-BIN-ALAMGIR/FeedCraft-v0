@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+    <title>FeedCraft</title>
+    <!--
+        The nav band's maker's mark, at tab size: the ink tile the header is painted in, and the
+        maize stripe that sits beside the wordmark, with two of the composition bar's other stops
+        behind it. Only palette tokens, so the tab matches the page.
+
+        SVG rather than a raster because it stays sharp on a projector at any scale. Browsers too
+        old to take an SVG icon fall back to the wwwroot/favicon.ico still sitting alongside it.
+    -->
+    <rect width="32" height="32" rx="6" fill="#14201C" />
+    <rect x="6" y="7" width="7" height="18" fill="#E8B23A" />
+    <rect x="15.5" y="7" width="4" height="18" fill="#5E7F8F" />
+    <rect x="22" y="7" width="4" height="18" fill="#3E7D6A" />
+</svg>

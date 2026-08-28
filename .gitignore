@@ -365,3 +365,7 @@ FodyWeavers.xsd
 *.db
 *.db-shm
 *.db-wal
+
+# Scratch folder for source artwork. What ships is the resized copy under wwwroot/img; the originals
+# here are working files and do not belong in the history.
+pic/
