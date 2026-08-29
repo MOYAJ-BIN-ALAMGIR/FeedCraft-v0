@@ -1,0 +1,16 @@
+# Keep the Docker build context small and the image free of local state.
+.git
+.gitattributes
+.github
+.claude
+.kilo
+pic
+**/bin
+**/obj
+*.db
+*.db-shm
+*.db-wal
+*.db.step6-backup
+FeedCraft-Presentation.html
+FeedCraft-Presentation.pptx
+FeedCraft-Professional.pptx
