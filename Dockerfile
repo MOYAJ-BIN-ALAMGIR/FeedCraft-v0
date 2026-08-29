@@ -12,6 +12,14 @@ COPY --from=build /app/publish .
 
 # Render detects the open port; .NET listens on 8080 via this env var.
 ENV ASPNETCORE_HTTP_PORTS=8080
+
+# Render's shared kernel exhausts the inotify instance limit (128), which crashes
+# .NET's file watcher at startup ("The configured user limit (128) on the number
+# of inotify instances has been reached"). Poll instead of using inotify, and
+# skip config reload-on-change — config is fixed at deploy time anyway.
+ENV DOTNET_USE_POLLING_FILE_WATCHER=1
+ENV DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE=false
+
 EXPOSE 8080
 
 # Migrations run inside Program.cs on startup, so the SQLite database
